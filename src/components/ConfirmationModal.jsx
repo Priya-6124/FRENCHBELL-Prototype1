@@ -1,21 +1,17 @@
 import React, { useEffect } from 'react';
 import confetti from 'canvas-confetti';
-import { playBellDing } from '../utils/audio';
 import { Bell, CheckCircle2, ArrowRight, FileText, Smartphone } from 'lucide-react';
 
 export default function ConfirmationModal({ order, onClose, onTrackOrder, onViewReceipt }) {
   if (!order) return null;
 
   useEffect(() => {
-    // Sound & Confetti trigger
-    playBellDing();
-
     try {
       confetti({
-        particleCount: 80,
-        spread: 70,
+        particleCount: 70,
+        spread: 60,
         origin: { y: 0.6 },
-        colors: ['#D4AF37', '#FAF5ED', '#331B10', '#E07A5F']
+        colors: ['#D4AF37', '#FAF5ED', '#331B10', '#10B981']
       });
     } catch (e) {}
   }, []);
@@ -39,7 +35,7 @@ export default function ConfirmationModal({ order, onClose, onTrackOrder, onView
           <h2 className="font-serif font-extrabold text-3xl text-french-dark">
             Your Order is In!
           </h2>
-          <p className="text-french-muted text-sm mt-1">
+          <p className="text-french-muted text-xs sm:text-sm mt-1">
             The French Bell kitchen has received your order and started cooking.
           </p>
         </div>
@@ -49,7 +45,7 @@ export default function ConfirmationModal({ order, onClose, onTrackOrder, onView
           <div className="flex items-center justify-between text-xs font-bold text-french-muted uppercase tracking-wider">
             <span>Order Reference</span>
             <span className="text-french-dark font-mono text-sm font-extrabold text-french-gold bg-french-dark px-2.5 py-0.5 rounded-md">
-              #{order.order_number || 'FB1042'}
+              #{order.order_number || 'FB001'}
             </span>
           </div>
 
@@ -60,6 +56,7 @@ export default function ConfirmationModal({ order, onClose, onTrackOrder, onView
 
           <div className="text-xs text-french-muted">
             Order Type: <strong className="uppercase text-french-dark">{order.order_type}</strong>
+            {order.table_number && <span> • Table #{order.table_number}</span>}
           </div>
         </div>
 

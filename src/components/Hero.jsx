@@ -1,17 +1,63 @@
-import React from 'react';
-import { motion } from 'framer-motion';
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import OrderModeToggle from './OrderModeToggle';
 import BrandedFoodImage from './BrandedFoodImage';
-import { Bell, Flame, Compass, Sparkles } from 'lucide-react';
+import { useApp } from '../context/AppContext';
+import { Bell, Flame, Compass, Sparkles, QrCode, ArrowRight } from 'lucide-react';
 
 export default function Hero({ onExploreClick }) {
+  const { advertisements, lockedTableNumber, orderMode } = useApp();
+  const [currentAdIdx, setCurrentAdIdx] = useState(0);
+
+  // Rotate through active promo advertisements
+  useEffect(() => {
+    if (!advertisements || advertisements.length <= 1) return;
+    const interval = setInterval(() => {
+      setCurrentAdIdx(prev => (prev + 1) % advertisements.length);
+    }, 4500);
+    return () => clearInterval(interval);
+  }, [advertisements]);
+
+  const activeAd = advertisements && advertisements.length > 0 ? advertisements[currentAdIdx] : null;
+
   return (
     <section id="hero" className="relative min-h-[92vh] pt-24 sm:pt-28 pb-12 bg-gradient-to-b from-french-dark via-[#2B170E] to-french-brown overflow-hidden flex flex-col justify-center">
       {/* Decorative Gold & Steam Background Glows */}
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-french-gold/15 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-10 right-10 w-80 h-80 bg-french-amber/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-10 right-10 w-80 h-80 bg-french-gold/10 rounded-full blur-3xl pointer-events-none" />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 w-full">
+        
+        {/* Table Dine-In QR Scan Notice Banner if customer scanned table QR */}
+        {lockedTableNumber && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6 p-4 rounded-3xl bg-gradient-to-r from-french-gold/30 via-french-gold/15 to-transparent border-2 border-french-gold shadow-2xl backdrop-blur-md flex flex-col sm:flex-row items-center justify-between gap-3 text-french-cream gold-glow"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-french-gold text-french-dark flex items-center justify-center font-black text-xl shadow">
+                🍽️
+              </div>
+              <div>
+                <span className="font-serif font-black text-lg sm:text-xl text-french-gold block">
+                  Seated at Table #{lockedTableNumber}
+                </span>
+                <span className="text-xs text-french-cream/90">
+                  Dine-in mode is active. Orders are routed straight to the chef's display!
+                </span>
+              </div>
+            </div>
+            <button
+              onClick={onExploreClick}
+              className="px-5 py-2.5 rounded-full bg-french-gold text-french-dark font-extrabold text-xs uppercase tracking-wider hover:bg-french-gold-hover transition-all flex items-center gap-1.5 shadow"
+            >
+              <span>Order for Table #{lockedTableNumber}</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </motion.div>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
 
           {/* Hero Left Content Column */}
@@ -120,27 +166,30 @@ export default function Hero({ onExploreClick }) {
             {/* Central Hero Food Image Slot */}
             <div className="relative w-full max-w-md aspect-[4/3] rounded-3xl overflow-hidden border-2 border-french-gold/40 shadow-2xl group">
               <BrandedFoodImage
-                src="https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=800&q=80"
-                name="Cheesy Blaster Burger & Loaded Feast"
+                src={activeAd ? activeAd.image_url : '/assets/food/burger.jpg'}
+                name={activeAd ? activeAd.title : 'Cheesy Blaster Burger & Loaded Feast'}
                 category="burgers"
-                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                alt="[ HERO FOOD IMAGE ]"
+                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                alt="French Bell Specialty"
               />
               
-              <div className="absolute inset-0 bg-gradient-to-t from-french-dark via-transparent to-transparent opacity-80" />
+              <div className="absolute inset-0 bg-gradient-to-t from-french-dark via-transparent to-transparent opacity-85" />
 
-              <div className="absolute bottom-4 left-4 right-4 p-4 rounded-2xl bg-french-dark/85 backdrop-blur-md border border-french-gold/30 flex items-center justify-between">
+              <div className="absolute bottom-4 left-4 right-4 p-4 rounded-2xl bg-french-dark/90 backdrop-blur-md border border-french-gold/30 flex items-center justify-between">
                 <div>
                   <span className="text-xs uppercase tracking-widest text-french-gold font-bold block">
-                    Chef's Masterpiece
+                    {activeAd ? 'Active Special Offer' : "Chef's Masterpiece"}
                   </span>
-                  <span className="font-serif font-bold text-french-cream text-lg">
-                    Cheesy Blaster Loaded
+                  <span className="font-serif font-bold text-french-cream text-base sm:text-lg line-clamp-1">
+                    {activeAd ? activeAd.title : 'Cheesy Blaster Burger'}
                   </span>
                 </div>
-                <div className="font-serif font-bold text-french-gold text-xl">
-                  ₹179
-                </div>
+                <button
+                  onClick={onExploreClick}
+                  className="px-3.5 py-1.5 rounded-xl bg-french-gold text-french-dark font-extrabold text-xs uppercase tracking-wider hover:bg-french-gold-hover transition-all"
+                >
+                  {activeAd ? activeAd.cta : 'Order'}
+                </button>
               </div>
             </div>
 

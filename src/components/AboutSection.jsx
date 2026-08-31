@@ -12,11 +12,11 @@ export default function AboutSection() {
           <div className="lg:col-span-5 relative">
             <div className="relative w-full aspect-[4/3] rounded-3xl overflow-hidden border-2 border-french-gold/30 shadow-2xl group">
               <BrandedFoodImage
-                src="https://images.unsplash.com/photo-1554118811-1e0d58224f24?auto=format&fit=crop&w=800&q=80"
-                name="French Bell Cafe Interior"
+                src="/assets/food/platter.jpg"
+                name="French Bell Cafe Kitchen"
                 category="cafe"
                 className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                alt="[ CAFE INTERIOR IMAGE ]"
+                alt="French Bell Cafe"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-french-dark/80 via-transparent to-transparent" />
               
@@ -58,39 +58,51 @@ export default function AboutSection() {
                 <p className="text-xs text-french-dark font-medium leading-normal">
                   K. Narayanpura, Bengaluru – 560077, Karnataka
                 </p>
+                <span className="text-[11px] text-french-muted block">
+                  Near K. Narayanpura Main Junction
+                </span>
               </div>
 
-              {/* Opening Hours */}
+              {/* Timing Card */}
               <div className="p-4 rounded-2xl bg-french-card border border-french-gold/25 shadow-sm space-y-1">
                 <div className="flex items-center gap-2 text-french-gold font-bold text-sm">
                   <Clock className="w-4 h-4" />
-                  <span>Opening Hours</span>
+                  <span>Cafe Hours</span>
                 </div>
                 <p className="text-xs text-french-dark font-medium leading-normal">
-                  Monday – Sunday: 11:00 AM – 11:00 PM
+                  Open Every Day: 11:00 AM – 11:30 PM
                 </p>
+                <span className="text-[11px] text-emerald-600 font-bold block">
+                  ● Kitchen Active & Cooking
+                </span>
               </div>
 
-              {/* Contact Phone */}
+              {/* Phone Card */}
               <div className="p-4 rounded-2xl bg-french-card border border-french-gold/25 shadow-sm space-y-1">
                 <div className="flex items-center gap-2 text-french-gold font-bold text-sm">
                   <Phone className="w-4 h-4" />
-                  <span>Call & WhatsApp</span>
+                  <span>Direct Hotline</span>
                 </div>
-                <p className="text-xs text-french-dark font-medium leading-normal">
+                <p className="text-xs text-french-dark font-medium leading-normal font-mono">
                   +91 98765 43210
                 </p>
+                <span className="text-[11px] text-french-muted block">
+                  Table bookings & WhatsApp support
+                </span>
               </div>
 
-              {/* Email */}
+              {/* Delivery Zone Card */}
               <div className="p-4 rounded-2xl bg-french-card border border-french-gold/25 shadow-sm space-y-1">
                 <div className="flex items-center gap-2 text-french-gold font-bold text-sm">
-                  <Mail className="w-4 h-4" />
-                  <span>Customer Support</span>
+                  <Sparkles className="w-4 h-4" />
+                  <span>Free Delivery</span>
                 </div>
                 <p className="text-xs text-french-dark font-medium leading-normal">
-                  hello@frenchbellcafe.com
+                  Free delivery within 2 KM radius
                 </p>
+                <span className="text-[11px] text-french-muted block">
+                  Nominal ₹15/km beyond 2km
+                </span>
               </div>
 
             </div>

@@ -17,6 +17,24 @@
       "password_hash": "$2a$10$7BHoQJ5LgFGdkWQXZ0CNmuoMoFQrBL40Ig28VdMLk9RLgdmnkX9dO",
       "role": "customer",
       "created_at": "2026-08-27T15:00:46.516Z"
+    },
+    {
+      "id": 3,
+      "name": "alice",
+      "phone": "1234567809",
+      "email": null,
+      "password_hash": "$2a$08$0D68lF3iEO2vsk3S78ndtO5C1QI5AF2Xy3Q8i2IGhpv8EyEfnjq/K",
+      "role": "customer",
+      "created_at": "2026-08-31T13:56:26.423Z"
+    },
+    {
+      "id": 4,
+      "name": "Foodie 7895",
+      "phone": "1234567895",
+      "email": null,
+      "password_hash": "$2a$08$ihCLzAv4uri234blGesiJeokKxml2WSfsf4QE9211MNutuvStaZuW",
+      "role": "customer",
+      "created_at": "2026-08-31T14:10:13.775Z"
     }
   ],
   "menu_categories": [
@@ -874,6 +892,50 @@
       "payment_status": "upi",
       "payment_method": "",
       "created_at": "2026-08-27T15:35:30.720Z"
+    },
+    {
+      "id": 6,
+      "order_number": "FB001",
+      "user_id": 3,
+      "order_type": "delivery",
+      "table_number": null,
+      "num_people": null,
+      "customer_name": "alice",
+      "phone": "1234567809",
+      "pickup_time": null,
+      "delivery_address": "K. Narayanpura, Main Rd",
+      "landmark": "Near SBI ATM",
+      "pincode": "560077",
+      "subtotal": 70,
+      "discount": 0,
+      "delivery_charge": 25,
+      "total": 99,
+      "payment_status": "dummy_upi_gpay",
+      "payment_method": "upi",
+      "order_status": "received",
+      "created_at": "2026-08-31T13:56:50.546Z"
+    },
+    {
+      "id": 7,
+      "order_number": "FB002",
+      "user_id": 4,
+      "order_type": "dine-in",
+      "table_number": "04",
+      "num_people": 3,
+      "customer_name": "Foodie 7895",
+      "phone": "1234567895",
+      "pickup_time": null,
+      "delivery_address": null,
+      "landmark": null,
+      "pincode": null,
+      "subtotal": 70,
+      "discount": 0,
+      "delivery_charge": 0,
+      "total": 74,
+      "payment_status": "dummy_upi_gpay",
+      "payment_method": "upi",
+      "order_status": "received",
+      "created_at": "2026-08-31T14:10:17.903Z"
     }
   ],
   "order_items": [
@@ -959,6 +1021,26 @@
       "quantity": 1,
       "unit_price": 70,
       "total_price": 70
+    },
+    {
+      "id": 10,
+      "order_id": 6,
+      "menu_item_id": 2,
+      "item_name": "Peri Peri Fries",
+      "variant": null,
+      "quantity": 1,
+      "unit_price": 70,
+      "total_price": 70
+    },
+    {
+      "id": 11,
+      "order_id": 7,
+      "menu_item_id": 9,
+      "item_name": "Fried Momos",
+      "variant": "Veg",
+      "quantity": 1,
+      "unit_price": 70,
+      "total_price": 70
     }
   ],
   "payments": [
@@ -1005,6 +1087,22 @@
       "amount": 190,
       "method": "upi",
       "created_at": "2026-08-27T15:35:30.752Z"
+    },
+    {
+      "id": 6,
+      "order_id": 6,
+      "transaction_id": "TXN_1788184610579_224",
+      "amount": 99,
+      "method": "dummy_upi_gpay",
+      "created_at": "2026-08-31T13:56:50.580Z"
+    },
+    {
+      "id": 7,
+      "order_id": 7,
+      "transaction_id": "TXN_1788185417907_443",
+      "amount": 74,
+      "method": "dummy_upi_gpay",
+      "created_at": "2026-08-31T14:10:17.910Z"
     }
   ],
   "offers": [
@@ -1085,6 +1183,16 @@
       "id": 5,
       "order_id": 5,
       "created_at": "2026-08-27T15:35:30.759Z"
+    },
+    {
+      "id": 6,
+      "order_id": 6,
+      "created_at": "2026-08-31T13:56:50.584Z"
+    },
+    {
+      "id": 7,
+      "order_id": 7,
+      "created_at": "2026-08-31T14:10:17.912Z"
     }
   ],
   "settings": [

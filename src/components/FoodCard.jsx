@@ -1,49 +1,27 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import BrandedFoodImage from './BrandedFoodImage';
-import { Heart, Plus, Minus, Check, Star } from 'lucide-react';
+import { Heart, Plus, Sparkles, SlidersHorizontal } from 'lucide-react';
 
 export default function FoodCard({ item }) {
-  const { cart, addToCart, updateCartQty, setSelectedFood, setActiveModal } = useApp();
+  const { cart, setSelectedFood, setActiveModal } = useApp();
   const [isFavorite, setIsFavorite] = useState(false);
-  const [selectedVariant, setSelectedVariant] = useState(
-    item.price_chicken ? 'Chicken' : (item.price_veg ? 'Veg' : null)
-  );
 
-  // Determine current price based on variant selection if applicable
-  const currentPrice = selectedVariant === 'Veg' && item.price_veg 
-    ? item.price_veg 
-    : (selectedVariant === 'Chicken' && item.price_chicken ? item.price_chicken : item.price);
+  // Check how many of this item (in any customization) are in cart
+  const cartItemsCount = cart
+    .filter(i => i.id === item.id)
+    .reduce((sum, i) => sum + i.quantity, 0);
 
-  // Check if item is already in cart
-  const cartItemId = `${item.id}-${selectedVariant || 'standard'}`;
-  const cartItem = cart.find(i => i.cartItemId === cartItemId);
-  const inCartQty = cartItem ? cartItem.quantity : 0;
-
-  const handleCardClick = () => {
-    setSelectedFood({ ...item, currentPrice, selectedVariant });
+  const handleOpenCustomizer = (e) => {
+    if (e) e.stopPropagation();
+    setSelectedFood(item);
     setActiveModal('foodDetails');
-  };
-
-  const handleAdd = (e) => {
-    e.stopPropagation();
-    addToCart(item, 1, selectedVariant);
-  };
-
-  const handleIncrement = (e) => {
-    e.stopPropagation();
-    updateCartQty(cartItemId, 1);
-  };
-
-  const handleDecrement = (e) => {
-    e.stopPropagation();
-    updateCartQty(cartItemId, -1);
   };
 
   return (
     <div
-      onClick={handleCardClick}
-      className="group relative bg-french-card border border-french-gold/25 rounded-3xl overflow-hidden shadow-lg hover:shadow-2xl hover:border-french-gold/60 transition-all duration-300 flex flex-col justify-between cursor-pointer transform hover:-translate-y-1"
+      onClick={handleOpenCustomizer}
+      className="group relative bg-french-card border border-french-gold/25 rounded-3xl overflow-hidden shadow-lg hover:shadow-2xl hover:border-french-gold/70 transition-all duration-300 flex flex-col justify-between cursor-pointer transform hover:-translate-y-1.5"
     >
       {/* Top Image Container */}
       <div className="relative w-full h-48 sm:h-52 overflow-hidden bg-french-brown/20">
@@ -51,23 +29,23 @@ export default function FoodCard({ item }) {
           src={item.image_url}
           name={item.name}
           category={item.category_slug || item.category_name}
-          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
           alt={item.name}
         />
 
         {/* Top Badges Overlay */}
         <div className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none">
           {/* Veg / Non-Veg Indicator Badge */}
-          <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-french-dark/85 backdrop-blur-md border border-french-gold/30 shadow-md">
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-french-dark/90 backdrop-blur-md border border-french-gold/30 shadow-md">
             <div className={`w-3.5 h-3.5 rounded-sm border flex items-center justify-center p-0.5 ${
-              (selectedVariant === 'Veg' || item.veg_type === 'veg') ? 'border-emerald-600 bg-emerald-950/40' : 'border-red-600 bg-red-950/40'
+              item.veg_type === 'veg' ? 'border-emerald-500 bg-emerald-950/60' : 'border-red-500 bg-red-950/60'
             }`}>
               <div className={`w-2 h-2 rounded-full ${
-                (selectedVariant === 'Veg' || item.veg_type === 'veg') ? 'bg-emerald-500' : 'bg-red-500'
+                item.veg_type === 'veg' ? 'bg-emerald-500 shadow-[0_0_6px_#10b981]' : 'bg-red-500 shadow-[0_0_6px_#ef4444]'
               }`} />
             </div>
             <span className="text-[10px] font-bold uppercase tracking-wider text-french-cream">
-              {(selectedVariant === 'Veg' || item.veg_type === 'veg') ? 'Veg' : 'Non-Veg'}
+              {item.veg_type === 'veg' ? 'Veg' : 'Non-Veg'}
             </span>
           </div>
 
@@ -89,10 +67,16 @@ export default function FoodCard({ item }) {
 
         {/* Popular Tag */}
         {item.popular === 1 && (
-          <div className="absolute bottom-3 left-3 px-2.5 py-0.5 rounded-md bg-french-gold text-french-dark text-[10px] font-extrabold uppercase tracking-wider shadow">
-            Popular ★
+          <div className="absolute bottom-3 left-3 px-2.5 py-0.5 rounded-md bg-gradient-to-r from-french-gold to-amber-500 text-french-dark text-[10px] font-extrabold uppercase tracking-wider shadow flex items-center gap-1">
+            <Sparkles className="w-3 h-3" />
+            <span>Chef Special</span>
           </div>
         )}
+
+        {/* Customization Available Tag */}
+        <div className="absolute bottom-3 right-3 px-2 py-0.5 rounded-md bg-french-dark/80 backdrop-blur-md border border-french-gold/30 text-french-gold text-[9px] font-bold uppercase tracking-wider">
+          Customizable ⚙️
+        </div>
       </div>
 
       {/* Card Content Area */}
@@ -109,67 +93,34 @@ export default function FoodCard({ item }) {
           </p>
         </div>
 
-        {/* Momos / Multi-variant selector if applicable */}
-        {(item.price_chicken && item.price_veg) && (
-          <div className="flex items-center gap-1.5 p-1 rounded-xl bg-french-cream border border-french-gold/20" onClick={e => e.stopPropagation()}>
-            <button
-              onClick={() => setSelectedVariant('Chicken')}
-              className={`flex-1 py-1 text-[11px] font-bold rounded-lg transition-all ${
-                selectedVariant === 'Chicken'
-                  ? 'bg-french-dark text-french-gold shadow-sm'
-                  : 'text-french-muted hover:text-french-dark'
-              }`}
-            >
-              Chicken (₹{item.price_chicken})
-            </button>
-            <button
-              onClick={() => setSelectedVariant('Veg')}
-              className={`flex-1 py-1 text-[11px] font-bold rounded-lg transition-all ${
-                selectedVariant === 'Veg'
-                  ? 'bg-emerald-800 text-white shadow-sm'
-                  : 'text-french-muted hover:text-french-dark'
-              }`}
-            >
-              Veg (₹{item.price_veg})
-            </button>
-          </div>
-        )}
-
-        {/* Bottom Price & Add Control Bar */}
-        <div className="pt-2 border-t border-french-gold/15 flex items-center justify-between">
+        {/* Bottom Price & Customize & Add Button */}
+        <div className="pt-3 border-t border-french-gold/15 flex items-center justify-between">
           <div>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-french-muted block">Price</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-french-muted block">From</span>
             <span className="font-serif font-extrabold text-xl text-french-dark">
-              ₹{currentPrice}
+              ₹{item.price_veg ? Math.min(item.price_veg, item.price) : item.price}
             </span>
           </div>
 
-          {/* Add / Quantity Control Button */}
-          {inCartQty === 0 ? (
-            <button
-              onClick={handleAdd}
-              className="px-4 py-2 rounded-2xl bg-french-dark text-french-gold border border-french-gold/40 hover:bg-french-gold hover:text-french-dark font-extrabold text-xs uppercase tracking-wider transition-all duration-300 flex items-center gap-1.5 shadow-md gold-glow"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Add</span>
-            </button>
-          ) : (
-            <div className="flex items-center rounded-2xl bg-french-gold text-french-dark p-0.5 font-bold shadow-md border border-french-dark">
-              <button
-                onClick={handleDecrement}
-                className="p-1.5 hover:bg-french-dark/10 rounded-xl transition-colors"
-              >
-                <Minus className="w-3.5 h-3.5" />
-              </button>
-              <span className="px-2 text-xs font-extrabold">{inCartQty}</span>
-              <button
-                onClick={handleIncrement}
-                className="p-1.5 hover:bg-french-dark/10 rounded-xl transition-colors"
-              >
+          {/* Customize & Add CTA Button */}
+          <button
+            onClick={handleOpenCustomizer}
+            className="px-3.5 py-2 rounded-2xl bg-french-dark text-french-gold border border-french-gold/40 hover:bg-french-gold hover:text-french-dark font-extrabold text-xs uppercase tracking-wider transition-all duration-300 flex items-center gap-1.5 shadow-md gold-glow group-hover:scale-105"
+          >
+            {cartItemsCount > 0 ? (
+              <>
+                <span className="bg-french-gold text-french-dark px-1.5 py-0.2 rounded-full text-[10px] font-black">
+                  {cartItemsCount}
+                </span>
+                <span>In Cart</span>
+              </>
+            ) : (
+              <>
                 <Plus className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          )}
+                <span>Customize</span>
+              </>
+            )}
+          </button>
         </div>
 
       </div>

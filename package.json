@@ -8,8 +8,8 @@
     "vite": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "server": "node server/index.js",
-    "seed": "node server/seed.js"
+    "server": "node --no-deprecation server/index.js",
+    "seed": "node --no-deprecation server/seed.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

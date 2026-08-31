@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import AdminSidebar from './AdminSidebar';
 import QuickActionBar from './QuickActionBar';
 import LiveOrderBoard from './LiveOrderBoard';
+import TableQRManager from './TableQRManager';
 import MenuManager from './MenuManager';
 import OfferManager from './OfferManager';
 import AdvertManager from './AdvertManager';
@@ -72,18 +73,18 @@ export default function AdminDashboard({ onBackToSite }) {
         {/* Tab Content Wrapper */}
         <main className="p-6 sm:p-8 flex-1 overflow-y-auto space-y-6">
           
-          {/* Quick Action Bar (always accessible at top) */}
+          {/* Quick Action Bar */}
           <QuickActionBar onAction={handleQuickAction} />
 
           {/* Render Active View */}
           {activeTab === 'dashboard' && <AnalyticsDashboard />}
           {activeTab === 'live-orders' && <LiveOrderBoard />}
+          {activeTab === 'table-qr' && <TableQRManager />}
           {activeTab === 'menu-manager' && <MenuManager />}
           {activeTab === 'offers-manager' && <OfferManager />}
           {activeTab === 'adverts-manager' && <AdvertManager />}
           {activeTab === 'analytics' && <AnalyticsDashboard />}
           {activeTab === 'customers' && <CustomerManager />}
-          {activeTab === 'delivery' && <DeliverySettings />}
           {activeTab === 'settings' && <DeliverySettings />}
         </main>
 

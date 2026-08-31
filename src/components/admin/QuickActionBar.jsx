@@ -1,20 +1,20 @@
 import React from 'react';
-import { Plus, ShoppingBag, Tag, Image, Download, Bike } from 'lucide-react';
+import { Plus, ShoppingBag, Tag, Image, Download, Bike, QrCode } from 'lucide-react';
 
 export default function QuickActionBar({ onAction }) {
   const actions = [
     { id: 'add-item', label: '+ Add Menu Item', icon: Plus, tab: 'menu-manager' },
-    { id: 'view-orders', label: 'View Live Orders', icon: ShoppingBag, tab: 'live-orders' },
+    { id: 'view-orders', label: 'Live Orders', icon: ShoppingBag, tab: 'live-orders' },
+    { id: 'table-qr', label: 'Table QRs', icon: QrCode, tab: 'table-qr' },
     { id: 'create-offer', label: 'Create Offer', icon: Tag, tab: 'offers-manager' },
-    { id: 'upload-ad', label: 'Upload Banner', icon: Image, tab: 'adverts-manager' },
-    { id: 'export-analytics', label: 'Export Analytics', icon: Download, tab: 'analytics', isModal: true },
-    { id: 'manage-delivery', label: 'Manage Delivery', icon: Bike, tab: 'delivery' },
+    { id: 'upload-ad', label: 'Promo Banners', icon: Image, tab: 'adverts-manager' },
+    { id: 'export-analytics', label: 'Export Report', icon: Download, tab: 'analytics', isModal: true },
   ];
 
   return (
     <div className="p-4 rounded-2xl bg-french-card border border-french-gold/30 shadow-md">
       <h4 className="text-xs font-extrabold uppercase tracking-wider text-french-muted mb-3">
-        ⚡ Operations Quick Actions
+        ⚡ Cafe Operations Quick Actions
       </h4>
       <div className="flex flex-wrap items-center gap-3">
         {actions.map((act) => {

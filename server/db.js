@@ -22,6 +22,32 @@ let dbData = {
   settings: []
 };
 
+export function getCafeBusinessDay(date = new Date()) {
+  const d = new Date(date);
+  // Cutoff at 2:00 AM (02:00). Orders between 00:00 and 01:59 belong to the previous day's shift!
+  if (d.getHours() < 2) {
+    d.setDate(d.getDate() - 1);
+  }
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+export function generateNextOrderNumber() {
+  loadStore();
+  const currentBusinessDay = getCafeBusinessDay(new Date());
+  
+  // Count how many orders belong to current business day
+  const ordersToday = (dbData.orders || []).filter(o => {
+    const oDay = getCafeBusinessDay(new Date(o.created_at || Date.now()));
+    return oDay === currentBusinessDay;
+  });
+
+  const nextSeq = ordersToday.length + 1;
+  return `FB${String(nextSeq).padStart(3, '0')}`;
+}
+
 function loadStore() {
   if (fs.existsSync(dbJsonPath)) {
     try {
@@ -41,7 +67,6 @@ loadStore();
 
 class PureDb {
   async exec(sql) {
-    // Schema exec placeholder
     saveStore();
     return true;
   }
@@ -52,8 +77,8 @@ class PureDb {
 
     if (sqlUpper.startsWith('INSERT INTO USERS')) {
       const [name, phone, email, password_hash, role] = params;
-      const id = dbData.users.length ? Math.max(...dbData.users.map(u => u.id)) + 1 : 1;
-      const user = { id, name, phone, email, password_hash, role, created_at: new Date().toISOString() };
+      const id = dbData.users.length ? Math.max(...dbData.users.map(u => u.id || 0)) + 1 : 1;
+      const user = { id, name, phone, email, password_hash, role: role || 'customer', created_at: new Date().toISOString() };
       dbData.users.push(user);
       saveStore();
       return { lastID: id };
@@ -67,9 +92,22 @@ class PureDb {
     }
 
     if (sqlUpper.startsWith('INSERT INTO MENU_ITEMS')) {
-      const [category_id, name, description, image_url, veg_type, price, price_chicken, price_veg, popular] = params;
-      const id = dbData.menu_items.length ? Math.max(...dbData.menu_items.map(m => m.id)) + 1 : 1;
-      const item = { id, category_id, name, description, image_url, veg_type, price, price_chicken, price_veg, available: 1, popular, created_at: new Date().toISOString() };
+      const [category_id, name, description, image_url, veg_type, price, price_chicken, price_veg, available, popular] = params;
+      const id = dbData.menu_items.length ? Math.max(...dbData.menu_items.map(m => m.id || 0)) + 1 : 1;
+      const item = {
+        id,
+        category_id,
+        name,
+        description,
+        image_url,
+        veg_type: veg_type || 'veg',
+        price,
+        price_chicken: price_chicken || null,
+        price_veg: price_veg || null,
+        available: available !== undefined ? available : 1,
+        popular: popular || 0,
+        created_at: new Date().toISOString()
+      };
       dbData.menu_items.push(item);
       saveStore();
       return { lastID: id };
@@ -107,21 +145,39 @@ class PureDb {
         delivery_charge, total, payment_status, payment_method, order_status, special_instructions
       ] = params;
 
-      const id = dbData.orders.length ? Math.max(...dbData.orders.map(o => o.id)) + 1 : 1;
+      const id = dbData.orders.length ? Math.max(...dbData.orders.map(o => o.id || 0)) + 1 : 1;
+      const finalOrderNumber = order_number || generateNextOrderNumber();
       const order = {
-        id, order_number, user_id, order_type, table_number, num_people, customer_name, phone,
-        pickup_time, delivery_address, landmark, pincode, subtotal, discount,
-        delivery_charge, total, payment_status, payment_method, order_status, special_instructions,
+        id,
+        order_number: finalOrderNumber,
+        user_id,
+        order_type,
+        table_number,
+        num_people,
+        customer_name,
+        phone,
+        pickup_time,
+        delivery_address,
+        landmark,
+        pincode,
+        subtotal,
+        discount,
+        delivery_charge,
+        total,
+        payment_status: payment_status || 'paid',
+        payment_method: payment_method || 'upi',
+        order_status: order_status || 'received',
+        special_instructions,
         created_at: new Date().toISOString()
       };
       dbData.orders.push(order);
       saveStore();
-      return { lastID: id };
+      return { lastID: id, order_number: finalOrderNumber };
     }
 
     if (sqlUpper.startsWith('INSERT INTO ORDER_ITEMS')) {
       const [order_id, menu_item_id, item_name, variant, quantity, unit_price, total_price] = params;
-      const id = dbData.order_items.length ? Math.max(...dbData.order_items.map(o => o.id)) + 1 : 1;
+      const id = dbData.order_items.length ? Math.max(...dbData.order_items.map(o => o.id || 0)) + 1 : 1;
       dbData.order_items.push({ id, order_id, menu_item_id, item_name, variant, quantity, unit_price, total_price });
       saveStore();
       return { lastID: id };
@@ -137,8 +193,8 @@ class PureDb {
 
     if (sqlUpper.startsWith('INSERT INTO OFFERS')) {
       const [title, description, coupon_code, discount_type, discount_value, minimum_order, start_date, end_date, active] = params;
-      const id = dbData.offers.length ? Math.max(...dbData.offers.map(o => o.id)) + 1 : 1;
-      dbData.offers.push({ id, title, description, coupon_code, discount_type, discount_value, minimum_order, start_date, end_date, active });
+      const id = dbData.offers.length ? Math.max(...dbData.offers.map(o => o.id || 0)) + 1 : 1;
+      dbData.offers.push({ id, title, description, coupon_code, discount_type, discount_value, minimum_order, start_date, end_date, active: active !== undefined ? active : 1 });
       saveStore();
       return { lastID: id };
     }
@@ -152,10 +208,17 @@ class PureDb {
 
     if (sqlUpper.startsWith('INSERT INTO ADVERTISEMENTS')) {
       const [title, image_url, description, cta, active] = params;
-      const id = dbData.advertisements.length ? Math.max(...dbData.advertisements.map(a => a.id)) + 1 : 1;
-      dbData.advertisements.push({ id, title, image_url, description, cta, active });
+      const id = dbData.advertisements.length ? Math.max(...dbData.advertisements.map(a => a.id || 0)) + 1 : 1;
+      dbData.advertisements.push({ id, title, image_url, description, cta, active: active !== undefined ? active : 1 });
       saveStore();
       return { lastID: id };
+    }
+
+    if (sqlUpper.startsWith('DELETE FROM ADVERTISEMENTS')) {
+      const [id] = params;
+      dbData.advertisements = dbData.advertisements.filter(a => a.id != id);
+      saveStore();
+      return { changes: 1 };
     }
 
     if (sqlUpper.startsWith('INSERT OR REPLACE INTO SETTINGS')) {
@@ -176,7 +239,7 @@ class PureDb {
 
     if (sqlUpper.startsWith('INSERT INTO PAYMENTS')) {
       const [order_id, transaction_id, amount, method, status] = params;
-      const id = dbData.payments.length ? Math.max(...dbData.payments.map(p => p.id)) + 1 : 1;
+      const id = dbData.payments.length ? Math.max(...dbData.payments.map(p => p.id || 0)) + 1 : 1;
       dbData.payments.push({ id, order_id, transaction_id, amount, method, status, created_at: new Date().toISOString() });
       saveStore();
       return { lastID: id };
@@ -184,7 +247,7 @@ class PureDb {
 
     if (sqlUpper.startsWith('INSERT INTO RECEIPTS')) {
       const [order_id, whatsapp_status] = params;
-      const id = dbData.receipts.length ? Math.max(...dbData.receipts.map(r => r.id)) + 1 : 1;
+      const id = dbData.receipts.length ? Math.max(...dbData.receipts.map(r => r.id || 0)) + 1 : 1;
       dbData.receipts.push({ id, order_id, whatsapp_status, created_at: new Date().toISOString() });
       saveStore();
       return { lastID: id };
@@ -198,48 +261,41 @@ class PureDb {
       return { changes: 1 };
     }
 
-    saveStore();
-    return { lastID: Date.now(), changes: 1 };
+    return { changes: 0 };
   }
 
   async get(sql, params = []) {
     loadStore();
     const sqlUpper = sql.trim().toUpperCase();
 
-    if (sqlUpper.includes('FROM USERS WHERE PHONE')) {
-      return dbData.users.find(u => u.phone === params[0] || u.email === params[0]) || null;
+    if (sqlUpper.includes('FROM USERS WHERE PHONE') || sqlUpper.includes('WHERE PHONE = ?')) {
+      const [phone, phone2] = params;
+      return dbData.users.find(u => u.phone === phone || (phone2 && u.email === phone2)) || null;
     }
-    if (sqlUpper.includes('FROM USERS WHERE ID')) {
-      return dbData.users.find(u => u.id == params[0]) || null;
+
+    if (sqlUpper.includes('FROM USERS WHERE ID = ?')) {
+      const [id] = params;
+      return dbData.users.find(u => u.id == id) || null;
     }
-    if (sqlUpper.includes('FROM ORDERS WHERE ORDER_NUMBER')) {
-      return dbData.orders.find(o => o.order_number === params[0] || o.id == params[0]) || null;
+
+    if (sqlUpper.includes('FROM ORDERS WHERE ORDER_NUMBER = ? OR ID = ?') || sqlUpper.includes('FROM ORDERS WHERE ORDER_NUMBER = ?') || sqlUpper.includes('FROM ORDERS WHERE ID = ?')) {
+      const [val, val2] = params;
+      return dbData.orders.find(o => o.order_number == val || o.id == val || (val2 && (o.order_number == val2 || o.id == val2))) || null;
     }
-    if (sqlUpper.includes('FROM ORDERS WHERE ID')) {
-      return dbData.orders.find(o => o.id == params[0]) || null;
+
+    if (sqlUpper.includes('FROM PAYMENTS WHERE ORDER_ID = ?')) {
+      const [order_id] = params;
+      return dbData.payments.find(p => p.order_id == order_id) || null;
     }
-    if (sqlUpper.includes('FROM PAYMENTS WHERE ORDER_ID')) {
-      return dbData.payments.find(p => p.order_id == params[0]) || null;
+
+    if (sqlUpper.includes('COUNT(*)') && sqlUpper.includes('FROM ORDERS')) {
+      const nonCancelled = dbData.orders.filter(o => o.order_status !== 'cancelled');
+      const count = nonCancelled.length;
+      const revenue = nonCancelled.reduce((sum, o) => sum + (o.total || 0), 0);
+      const avg_order = count ? revenue / count : 0;
+      return { count, revenue, avg_order };
     }
-    if (sqlUpper.includes('SELECT COUNT(*) AS COUNT, SUM(TOTAL)')) {
-      const valid = dbData.orders.filter(o => o.order_status !== 'cancelled');
-      const count = valid.length;
-      const revenue = valid.reduce((sum, o) => sum + Number(o.total || 0), 0);
-      const avg = count ? revenue / count : 0;
-      return { count, revenue, avg_order: avg };
-    }
-    if (sqlUpper.includes('WHERE ORDER_STATUS IN ("RECEIVED"')) {
-      const count = dbData.orders.filter(o => ['received', 'preparing', 'accepted'].includes(o.order_status)).length;
-      return { count };
-    }
-    if (sqlUpper.includes('WHERE ORDER_STATUS = "COMPLETED"')) {
-      const count = dbData.orders.filter(o => o.order_status === 'completed').length;
-      return { count };
-    }
-    if (sqlUpper.includes('DISTINCT PHONE')) {
-      const set = new Set(dbData.orders.map(o => o.phone));
-      return { count: set.size };
-    }
+
     return null;
   }
 
@@ -250,62 +306,45 @@ class PureDb {
     if (sqlUpper.includes('FROM MENU_CATEGORIES')) {
       return [...dbData.menu_categories].sort((a, b) => a.display_order - b.display_order);
     }
+
     if (sqlUpper.includes('FROM MENU_ITEMS')) {
       return dbData.menu_items.map(m => {
-        const cat = dbData.menu_categories.find(c => c.id === m.category_id);
-        return { ...m, category_name: cat ? cat.name : 'Starters', category_slug: cat ? cat.slug : 'starters' };
-      });
-    }
-    if (sqlUpper.includes('FROM ORDERS')) {
-      let res = [...dbData.orders];
-      if (params.length && sqlUpper.includes('ORDER_STATUS = ?')) {
-        res = res.filter(o => o.order_status === params[0]);
-      }
-      if (params.length && sqlUpper.includes('PHONE = ?')) {
-        res = res.filter(o => o.phone === params[params.length - 1]);
-      }
-      return res.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
-    }
-    if (sqlUpper.includes('FROM ORDER_ITEMS WHERE ORDER_ID')) {
-      return dbData.order_items.filter(i => i.order_id == params[0]);
-    }
-    if (sqlUpper.includes('FROM OFFERS')) {
-      return dbData.offers.filter(o => o.active === 1);
-    }
-    if (sqlUpper.includes('FROM ADVERTISEMENTS')) {
-      return dbData.advertisements.filter(a => a.active === 1);
-    }
-    if (sqlUpper.includes('FROM SETTINGS')) {
-      return dbData.settings;
-    }
-    if (sqlUpper.includes('GROUP BY ORDER_TYPE')) {
-      const types = ['dine-in', 'takeaway', 'delivery'];
-      return types.map(t => {
-        const matching = dbData.orders.filter(o => o.order_type === t);
+        const cat = dbData.menu_categories.find(c => c.id == m.category_id);
         return {
-          order_type: t,
-          count: matching.length,
-          revenue: matching.reduce((s, o) => s + Number(o.total || 0), 0)
+          ...m,
+          category_name: cat ? cat.name : 'Specialty',
+          category_slug: cat ? cat.slug : 'specialty'
         };
       });
     }
-    if (sqlUpper.includes('GROUP BY ITEM_NAME')) {
-      const itemMap = {};
-      dbData.order_items.forEach(i => {
-        if (!itemMap[i.item_name]) itemMap[i.item_name] = { item_name: i.item_name, total_qty: 0, total_sales: 0 };
-        itemMap[i.item_name].total_qty += Number(i.quantity);
-        itemMap[i.item_name].total_sales += Number(i.total_price);
-      });
-      return Object.values(itemMap).sort((a, b) => b.total_qty - a.total_qty).slice(0, 5);
+
+    if (sqlUpper.includes('FROM OFFERS')) {
+      return dbData.offers.filter(o => o.active == 1);
     }
+
+    if (sqlUpper.includes('FROM ADVERTISEMENTS')) {
+      return dbData.advertisements.filter(a => a.active == 1);
+    }
+
+    if (sqlUpper.includes('FROM SETTINGS')) {
+      return dbData.settings;
+    }
+
+    if (sqlUpper.includes('FROM ORDER_ITEMS WHERE ORDER_ID = ?')) {
+      const [order_id] = params;
+      return dbData.order_items.filter(i => i.order_id == order_id);
+    }
+
+    if (sqlUpper.includes('FROM ORDERS')) {
+      return [...dbData.orders].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    }
+
     return [];
   }
 }
 
 const dbInstance = new PureDb();
 
-export async function getDb() {
+export default async function getDb() {
   return dbInstance;
 }
-
-export default getDb;

@@ -1,22 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { Tag, Sparkles, Copy, Check, Percent, Gift } from 'lucide-react';
+import { Tag, Sparkles, Check, Gift } from 'lucide-react';
 
 export default function OffersSection() {
-  const { setAppliedOffer, addNotification, setCartOpen } = useApp();
-  const [offers, setOffers] = useState([
-    { id: 1, title: 'Ding! 10% Off Cravings', description: 'Get 10% off on all orders above ₹199', coupon_code: 'DING10', discount_type: 'percentage', discount_value: 10, minimum_order: 199 },
-    { id: 2, title: 'Flat ₹50 Off Special', description: 'Enjoy flat ₹50 off on orders above ₹299', coupon_code: 'BELLFB', discount_type: 'fixed', discount_value: 50, minimum_order: 299 },
-    { id: 3, title: 'Welcome Feast', description: 'Flat ₹30 off for new bell lovers on minimum ₹150', coupon_code: 'WELCOME30', discount_type: 'fixed', discount_value: 30, minimum_order: 150 }
-  ]);
+  const { offers, setAppliedOffer, addNotification, setCartOpen } = useApp();
   const [copiedCode, setCopiedCode] = useState(null);
-
-  useEffect(() => {
-    fetch('/api/offers')
-      .then(res => res.ok ? res.json() : null)
-      .then(data => { if (data && data.length) setOffers(data); })
-      .catch(() => {});
-  }, []);
 
   const handleApplyOffer = (offer) => {
     setAppliedOffer(offer);
@@ -51,7 +39,7 @@ export default function OffersSection() {
 
         {/* Offers Cards Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {offers.map((offer) => (
+          {(offers || []).map((offer) => (
             <div
               key={offer.id}
               className="relative p-6 rounded-3xl bg-gradient-to-br from-french-dark/90 via-french-brown/80 to-[#2A170F] border border-french-gold/30 shadow-2xl backdrop-blur-md flex flex-col justify-between group hover:border-french-gold transition-all duration-300 transform hover:-translate-y-1"

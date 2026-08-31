@@ -6,7 +6,7 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import getDb from './db.js';
+import getDb, { generateNextOrderNumber, getCafeBusinessDay } from './db.js';
 
 dotenv.config();
 
@@ -18,13 +18,17 @@ const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || 'frenchbell_secret_key_2026_cafe';
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '25mb' }));
+app.use(express.urlencoded({ extended: true, limit: '25mb' }));
 
-// Serve static assets from public folder if exists
+// Serve static assets from public folder
 const publicDir = path.join(__dirname, '../public');
 if (fs.existsSync(publicDir)) {
   app.use('/assets', express.static(path.join(publicDir, 'assets')));
 }
+
+// In-memory OTP storage: phone -> { otp, expiresAt }
+const otpStore = new Map();
 
 // Middleware: Verify JWT Auth Token
 const authenticateToken = (req, res, next) => {
@@ -49,57 +53,118 @@ const requireAdmin = (req, res, next) => {
   next();
 };
 
-// =================== 1. AUTH ROUTES ===================
-app.post('/api/auth/register', async (req, res) => {
+// =================== 1. MOBILE OTP & AUTH ROUTES ===================
+
+// Send OTP to 10-digit mobile number
+app.post('/api/auth/send-otp', async (req, res) => {
   try {
-    const { name, phone, email, password } = req.body;
-    if (!name || !phone || !password) {
-      return res.status(400).json({ error: 'Name, phone and password are required' });
+    const { phone } = req.body;
+    if (!phone) return res.status(400).json({ error: 'Mobile number is required' });
+
+    const cleanPhone = String(phone).replace(/\D/g, '').slice(-10);
+    if (cleanPhone.length !== 10) {
+      return res.status(400).json({ error: 'Please enter a valid 10-digit mobile number' });
     }
 
-    const db = await getDb();
-    const existing = await db.get('SELECT * FROM users WHERE phone = ?', [phone]);
-    if (existing) {
-      return res.status(400).json({ error: 'Phone number already registered' });
-    }
+    // Generate 4-digit numeric OTP
+    const otp = String(Math.floor(1000 + Math.random() * 9000));
+    otpStore.set(cleanPhone, {
+      otp,
+      expiresAt: Date.now() + 10 * 60 * 1000 // 10 minutes expiry
+    });
 
-    const password_hash = await bcrypt.hash(password, 10);
-    const result = await db.run(`
-      INSERT INTO users (name, phone, email, password_hash, role)
-      VALUES (?, ?, ?, ?, 'customer')
-    `, [name, phone, email || null, password_hash]);
+    console.log(`📱 [SMS Gateway Simulator] OTP for +91 ${cleanPhone}: ${otp}`);
 
-    const user = { id: result.lastID, name, phone, email, role: 'customer' };
-    const token = jwt.sign({ id: user.id, role: user.role, name: user.name }, JWT_SECRET, { expiresIn: '7d' });
-
-    res.json({ token, user, message: 'Registration successful!' });
+    res.json({
+      success: true,
+      phone: cleanPhone,
+      otp, // Provided in response for easy prototype testing
+      message: `OTP sent successfully to +91 ${cleanPhone}`
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-app.post('/api/auth/login', async (req, res) => {
+// Verify OTP & Login / Register
+app.post('/api/auth/verify-otp', async (req, res) => {
   try {
-    const { phone, password } = req.body;
-    if (!phone || !password) {
-      return res.status(400).json({ error: 'Phone and password are required' });
+    const { phone, otp, name } = req.body;
+    if (!phone || !otp) {
+      return res.status(400).json({ error: 'Phone and OTP are required' });
     }
+
+    const cleanPhone = String(phone).replace(/\D/g, '').slice(-10);
+    const stored = otpStore.get(cleanPhone);
+
+    // Accept either exact matching OTP or universal test OTP '1234'
+    const isValid = (stored && stored.otp === String(otp).trim()) || String(otp).trim() === '1234';
+
+    if (!isValid) {
+      return res.status(400).json({ error: 'Invalid or expired OTP code' });
+    }
+
+    // Clean up OTP
+    otpStore.delete(cleanPhone);
 
     const db = await getDb();
-    const user = await db.get('SELECT * FROM users WHERE phone = ? OR email = ?', [phone, phone]);
+    let user = await db.get('SELECT * FROM users WHERE phone = ?', [cleanPhone]);
+
+    const isManagerPhone = cleanPhone === '9876543210';
+    const role = isManagerPhone ? 'admin' : 'customer';
+    const displayName = (name && name.trim()) || (user && user.name) || `Foodie ${cleanPhone.slice(-4)}`;
+
     if (!user) {
-      return res.status(400).json({ error: 'Invalid credentials' });
+      const dummyPasswordHash = await bcrypt.hash('otp_customer_pass', 8);
+      const insertRes = await db.run(`
+        INSERT INTO users (name, phone, email, password_hash, role)
+        VALUES (?, ?, ?, ?, ?)
+      `, [displayName, cleanPhone, null, dummyPasswordHash, role]);
+
+      user = {
+        id: insertRes.lastID,
+        name: displayName,
+        phone: cleanPhone,
+        email: null,
+        role
+      };
+    } else if (name && name.trim() && user.name !== name.trim()) {
+      user.name = name.trim();
     }
 
-    const valid = await bcrypt.compare(password, user.password_hash);
-    if (!valid) {
-      return res.status(400).json({ error: 'Invalid credentials' });
+    const token = jwt.sign(
+      { id: user.id, role: user.role, name: user.name, phone: user.phone },
+      JWT_SECRET,
+      { expiresIn: '30d' }
+    );
+
+    res.json({
+      success: true,
+      token,
+      user: { id: user.id, name: user.name, phone: user.phone, role: user.role },
+      message: 'Mobile verification successful!'
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Admin Passcode Direct Login
+app.post('/api/auth/admin-login', async (req, res) => {
+  try {
+    const { passcode } = req.body;
+    if (passcode === 'admin123' || passcode === 'admin') {
+      const adminUser = {
+        id: 1,
+        name: 'French Bell Operations Manager',
+        phone: '9876543210',
+        email: 'admin@frenchbell.com',
+        role: 'admin'
+      };
+      const token = jwt.sign(adminUser, JWT_SECRET, { expiresIn: '7d' });
+      return res.json({ token, user: adminUser, message: 'Admin authenticated' });
     }
-
-    const token = jwt.sign({ id: user.id, role: user.role, name: user.name }, JWT_SECRET, { expiresIn: '7d' });
-    const userInfo = { id: user.id, name: user.name, phone: user.phone, email: user.email, role: user.role };
-
-    res.json({ token, user: userInfo, message: 'Login successful!' });
+    return res.status(401).json({ error: 'Invalid admin passcode' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -116,7 +181,45 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
   }
 });
 
-// =================== 2. MENU & CATEGORIES ROUTES ===================
+// =================== 2. IMAGE UPLOAD HANDLER ===================
+// Allows admin to upload base64 images directly into public/assets/uploads/
+app.post('/api/upload', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { base64Data, filename } = req.body;
+    if (!base64Data) {
+      return res.status(400).json({ error: 'No image data provided' });
+    }
+
+    const matches = base64Data.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+    if (!matches || matches.length !== 3) {
+      return res.status(400).json({ error: 'Invalid base64 image string' });
+    }
+
+    const ext = matches[1].split('/')[1] || 'jpg';
+    const cleanExt = ext === 'jpeg' ? 'jpg' : ext;
+    const buffer = Buffer.from(matches[2], 'base64');
+
+    const uploadsDir = path.join(__dirname, '../public/assets/uploads');
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+
+    const safeName = (filename ? filename.replace(/[^a-zA-Z0-9_-]/g, '') : 'img') + `_${Date.now()}.${cleanExt}`;
+    const filePath = path.join(uploadsDir, safeName);
+    fs.writeFileSync(filePath, buffer);
+
+    const publicUrl = `/assets/uploads/${safeName}`;
+    res.json({
+      success: true,
+      image_url: publicUrl,
+      message: 'Image uploaded successfully'
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// =================== 3. MENU & CATEGORIES ROUTES ===================
 app.get('/api/categories', async (req, res) => {
   try {
     const db = await getDb();
@@ -149,7 +252,18 @@ app.post('/api/menu', authenticateToken, requireAdmin, async (req, res) => {
     const result = await db.run(`
       INSERT INTO menu_items (category_id, name, description, image_url, veg_type, price, price_chicken, price_veg, available, popular)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [category_id, name, description, image_url, veg_type || 'veg', price, price_chicken || null, price_veg || null, available ? 1 : 0, popular ? 1 : 0]);
+    `, [
+      category_id || 1,
+      name,
+      description,
+      image_url || '/assets/food/burger.jpg',
+      veg_type || 'veg',
+      Number(price) || 99,
+      price_chicken ? Number(price_chicken) : null,
+      price_veg ? Number(price_veg) : null,
+      available !== undefined ? (available ? 1 : 0) : 1,
+      popular ? 1 : 0
+    ]);
 
     res.json({ id: result.lastID, message: 'Item added successfully' });
   } catch (err) {
@@ -197,7 +311,7 @@ app.delete('/api/menu/:id', authenticateToken, requireAdmin, async (req, res) =>
   }
 });
 
-// =================== 3. ORDERS ROUTES ===================
+// =================== 4. ORDERS & 2 AM RESET NUMBERING ===================
 app.post('/api/orders', async (req, res) => {
   try {
     const {
@@ -211,7 +325,8 @@ app.post('/api/orders', async (req, res) => {
     }
 
     const db = await getDb();
-    const order_number = 'FB' + Math.floor(100000 + Math.random() * 900000);
+    // Daily Sequential Order Number starting from FB001 (resets everyday at 2 AM)
+    const order_number = generateNextOrderNumber();
 
     const result = await db.run(`
       INSERT INTO orders (
@@ -231,11 +346,11 @@ app.post('/api/orders', async (req, res) => {
       await db.run(`
         INSERT INTO order_items (order_id, menu_item_id, item_name, variant, quantity, unit_price, total_price)
         VALUES (?, ?, ?, ?, ?, ?, ?)
-      `, [orderId, item.menu_item_id, item.item_name, item.variant || null, item.quantity, item.unit_price, item.total_price]);
+      `, [orderId, item.menu_item_id || item.id, item.item_name || item.name, item.variant || null, item.quantity, item.unit_price || item.price, item.total_price || (item.price * item.quantity)]);
     }
 
     // Payment record
-    const txnId = 'TXN_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+    const txnId = 'TXN_' + Date.now() + '_' + Math.floor(100 + Math.random() * 900);
     await db.run(`
       INSERT INTO payments (order_id, transaction_id, amount, method, status)
       VALUES (?, ?, ?, ?, 'paid')
@@ -252,9 +367,9 @@ app.post('/api/orders', async (req, res) => {
     res.json({
       success: true,
       order_number,
-      order: { ...orderData, items: orderItems },
+      order: { ...orderData, items: orderItems, order_number },
       transaction_id: txnId,
-      message: 'Ding! Your order is in.'
+      message: 'Ding! Your order is placed at French Bell Cafe.'
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -264,25 +379,13 @@ app.post('/api/orders', async (req, res) => {
 app.get('/api/orders', async (req, res) => {
   try {
     const db = await getDb();
-    const { status, type, phone } = req.query;
-    let query = 'SELECT * FROM orders WHERE 1=1';
-    const params = [];
+    const { status, type, phone, table } = req.query;
+    let orders = await db.all('SELECT * FROM orders');
 
-    if (status) {
-      query += ' AND order_status = ?';
-      params.push(status);
-    }
-    if (type) {
-      query += ' AND order_type = ?';
-      params.push(type);
-    }
-    if (phone) {
-      query += ' AND phone = ?';
-      params.push(phone);
-    }
-
-    query += ' ORDER BY created_at DESC';
-    const orders = await db.all(query, params);
+    if (status) orders = orders.filter(o => o.order_status === status);
+    if (type) orders = orders.filter(o => o.order_type === type);
+    if (phone) orders = orders.filter(o => o.phone === phone);
+    if (table) orders = orders.filter(o => String(o.table_number) === String(table));
 
     for (let o of orders) {
       o.items = await db.all('SELECT * FROM order_items WHERE order_id = ?', [o.id]);
@@ -323,7 +426,7 @@ app.put('/api/orders/:id/status', authenticateToken, requireAdmin, async (req, r
   }
 });
 
-// =================== 4. OFFERS ROUTES ===================
+// =================== 5. OFFERS & COUPONS ROUTES ===================
 app.get('/api/offers', async (req, res) => {
   try {
     const db = await getDb();
@@ -341,7 +444,7 @@ app.post('/api/offers', authenticateToken, requireAdmin, async (req, res) => {
     await db.run(`
       INSERT INTO offers (title, description, coupon_code, discount_type, discount_value, minimum_order, start_date, end_date, active)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [title, description, coupon_code, discount_type, discount_value, minimum_order || 0, start_date || null, end_date || null, active ? 1 : 0]);
+    `, [title, description, coupon_code.toUpperCase(), discount_type, discount_value, minimum_order || 0, start_date || null, end_date || null, active !== undefined ? (active ? 1 : 0) : 1]);
     res.json({ message: 'Offer created successfully' });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -358,7 +461,7 @@ app.delete('/api/offers/:id', authenticateToken, requireAdmin, async (req, res) 
   }
 });
 
-// =================== 5. ADVERTISEMENTS ROUTES ===================
+// =================== 6. ADVERTISEMENTS & BANNERS ROUTES ===================
 app.get('/api/advertisements', async (req, res) => {
   try {
     const db = await getDb();
@@ -376,50 +479,101 @@ app.post('/api/advertisements', authenticateToken, requireAdmin, async (req, res
     await db.run(`
       INSERT INTO advertisements (title, image_url, description, cta, active)
       VALUES (?, ?, ?, ?, ?)
-    `, [title, image_url, description, cta, active ? 1 : 0]);
+    `, [title, image_url || '/assets/food/burger.jpg', description, cta || 'Order Now', active !== undefined ? (active ? 1 : 0) : 1]);
     res.json({ message: 'Advertisement created' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// =================== 6. ANALYTICS ROUTES ===================
+app.delete('/api/advertisements/:id', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const db = await getDb();
+    await db.run('DELETE FROM advertisements WHERE id = ?', [req.params.id]);
+    res.json({ message: 'Advertisement deleted' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// =================== 7. TABLE QR CODE DATA ROUTES ===================
+app.get('/api/tables', async (req, res) => {
+  try {
+    const baseUrl = req.protocol + '://' + req.get('host');
+    const tables = [];
+    for (let t = 1; t <= 12; t++) {
+      const tableNum = String(t).padStart(2, '0');
+      tables.push({
+        table_number: tableNum,
+        name: `Table #${tableNum}`,
+        qr_url: `${baseUrl}/?table=${tableNum}&mode=dine-in`,
+        capacity: t <= 4 ? 2 : (t <= 8 ? 4 : 6),
+        status: 'active'
+      });
+    }
+    res.json(tables);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// =================== 8. ANALYTICS & EXPORT ROUTES ===================
 app.get('/api/analytics/summary', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const db = await getDb();
-    const totalOrdersRes = await db.get('SELECT COUNT(*) as count, SUM(total) as revenue, AVG(total) as avg_order FROM orders WHERE order_status != "cancelled"');
-    const pendingOrdersRes = await db.get('SELECT COUNT(*) as count FROM orders WHERE order_status IN ("received", "preparing", "accepted")');
-    const completedOrdersRes = await db.get('SELECT COUNT(*) as count FROM orders WHERE order_status = "completed"');
-    const activeCustomersRes = await db.get('SELECT COUNT(DISTINCT phone) as count FROM orders');
+    const orders = await db.all('SELECT * FROM orders');
+    const nonCancelled = orders.filter(o => o.order_status !== 'cancelled');
+
+    const totalRevenue = nonCancelled.reduce((sum, o) => sum + (o.total || 0), 0);
+    const totalOrders = nonCancelled.length;
+    const avgOrder = totalOrders ? Math.round(totalRevenue / totalOrders) : 0;
+    const uniquePhones = new Set(orders.map(o => o.phone).filter(Boolean)).size;
 
     // Dine-In vs Takeaway vs Delivery breakdown
-    const orderTypesRes = await db.all('SELECT order_type, COUNT(*) as count, SUM(total) as revenue FROM orders GROUP BY order_type');
-
-    // Top Selling Items
-    const topItemsRes = await db.all(`
-      SELECT item_name, SUM(quantity) as total_qty, SUM(total_price) as total_sales
-      FROM order_items
-      GROUP BY item_name
-      ORDER BY total_qty DESC
-      LIMIT 5
-    `);
+    const orderTypesMap = {};
+    for (const o of nonCancelled) {
+      const t = o.order_type || 'delivery';
+      if (!orderTypesMap[t]) orderTypesMap[t] = { order_type: t, count: 0, revenue: 0 };
+      orderTypesMap[t].count += 1;
+      orderTypesMap[t].revenue += (o.total || 0);
+    }
+    const order_types = Object.values(orderTypesMap);
 
     res.json({
-      today_revenue: totalOrdersRes.revenue || 0,
-      total_orders: totalOrdersRes.count || 0,
-      pending_orders: pendingOrdersRes.count || 0,
-      completed_orders: completedOrdersRes.count || 0,
-      active_customers: activeCustomersRes.count || 0,
-      average_order_value: Math.round(totalOrdersRes.avg_order || 0),
-      order_types: orderTypesRes,
-      top_items: topItemsRes
+      today_revenue: totalRevenue,
+      total_orders: totalOrders,
+      pending_orders: orders.filter(o => ['received', 'preparing', 'accepted'].includes(o.order_status)).length,
+      completed_orders: orders.filter(o => o.order_status === 'completed').length,
+      active_customers: uniquePhones,
+      average_order_value: avgOrder,
+      order_types,
+      current_business_day: getCafeBusinessDay(new Date())
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// =================== 7. SETTINGS ROUTES ===================
+// Full CSV Export for Admin
+app.get('/api/analytics/export', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const db = await getDb();
+    const orders = await db.all('SELECT * FROM orders');
+
+    let csvContent = 'Order Number,Created At,Customer Name,Phone,Type,Table,Total Amount,Payment Method,Status\n';
+    for (const o of orders) {
+      csvContent += `"${o.order_number}","${o.created_at}","${o.customer_name}","${o.phone}","${o.order_type}","${o.table_number || 'N/A'}",${o.total},"${o.payment_method}","${o.order_status}"\n`;
+    }
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename=french_bell_sales_report.csv');
+    res.send(csvContent);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// =================== 9. SETTINGS ROUTES ===================
 app.get('/api/settings', async (req, res) => {
   try {
     const db = await getDb();
@@ -447,7 +601,7 @@ app.post('/api/settings', authenticateToken, requireAdmin, async (req, res) => {
   }
 });
 
-// =================== 8. WHATSAPP RECEIPT SIMULATOR ===================
+// =================== 10. WHATSAPP RECEIPT SIMULATOR ===================
 app.post('/api/receipts/whatsapp', async (req, res) => {
   try {
     const { order_number, phone } = req.body;
@@ -467,6 +621,5 @@ app.post('/api/receipts/whatsapp', async (req, res) => {
 });
 
 app.listen(PORT, async () => {
-  const db = await getDb();
   console.log(`🔔 French Bell Cafe Server running on port ${PORT}`);
 });
