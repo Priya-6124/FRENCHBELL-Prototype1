@@ -6,6 +6,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const dbJsonPath = path.join(__dirname, 'frenchbell_db.json');
+const tmpDbPath = path.join('/tmp', 'frenchbell_db.json');
 
 // In-Memory & Persisted Pure JS Database Store for instant zero-dependency execution
 let dbData = {
@@ -49,6 +50,15 @@ export function generateNextOrderNumber() {
 }
 
 function loadStore() {
+  // Check /tmp first if on serverless (Vercel/Lambda)
+  if ((process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) && fs.existsSync(tmpDbPath)) {
+    try {
+      const raw = fs.readFileSync(tmpDbPath, 'utf8');
+      dbData = JSON.parse(raw);
+      return;
+    } catch (e) {}
+  }
+
   if (fs.existsSync(dbJsonPath)) {
     try {
       const raw = fs.readFileSync(dbJsonPath, 'utf8');
@@ -59,8 +69,16 @@ function loadStore() {
 
 function saveStore() {
   try {
-    fs.writeFileSync(dbJsonPath, JSON.stringify(dbData, null, 2), 'utf8');
-  } catch (e) {}
+    if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+      fs.writeFileSync(tmpDbPath, JSON.stringify(dbData, null, 2), 'utf8');
+    } else {
+      fs.writeFileSync(dbJsonPath, JSON.stringify(dbData, null, 2), 'utf8');
+    }
+  } catch (e) {
+    try {
+      fs.writeFileSync(tmpDbPath, JSON.stringify(dbData, null, 2), 'utf8');
+    } catch (e2) {}
+  }
 }
 
 loadStore();

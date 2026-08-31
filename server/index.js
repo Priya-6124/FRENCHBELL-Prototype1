@@ -620,6 +620,10 @@ app.post('/api/receipts/whatsapp', async (req, res) => {
   }
 });
 
-app.listen(PORT, async () => {
-  console.log(`🔔 French Bell Cafe Server running on port ${PORT}`);
-});
+if (!process.env.VERCEL) {
+  app.listen(PORT, async () => {
+    console.log(`🔔 French Bell Cafe Server running on port ${PORT}`);
+  });
+}
+
+export default app;
