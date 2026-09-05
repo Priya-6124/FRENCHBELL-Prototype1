@@ -15,7 +15,7 @@ export default function DeliveryModal({ onClose }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     setDeliveryDetails({ customerName, phone, address, landmark, pincode, instructions });
-    addNotification('Delivery Address Saved 🛵', 'Delivery details updated!', 'success');
+    addNotification('Delivery Address Saved', 'Delivery details updated!', 'success');
     if (onClose) onClose();
   };
 
@@ -30,8 +30,8 @@ export default function DeliveryModal({ onClose }) {
         </button>
 
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 text-emerald-600 flex items-center justify-center text-2xl font-bold border border-emerald-500/30">
-            🛵
+          <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 text-emerald-600 flex items-center justify-center border border-emerald-500/30">
+            <Bike className="w-6 h-6 text-emerald-600" />
           </div>
           <div>
             <h3 className="font-serif font-bold text-xl text-french-dark">Delivery Address</h3>
@@ -41,9 +41,9 @@ export default function DeliveryModal({ onClose }) {
 
         {/* Free Delivery Banner */}
         <div className="mb-4 p-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-700 text-white shadow-md flex items-center gap-3">
-          <Sparkles className="w-5 h-5 text-yellow-300 shrink-0 animate-pulse" />
+          <Sparkles className="w-5 h-5 text-yellow-300 shrink-0" />
           <div className="text-xs">
-            <p className="font-bold text-sm">You're within 2 km — delivery is FREE 🎉</p>
+            <p className="font-bold text-sm">You are within 2 km — delivery is free</p>
             <p className="opacity-90">K. Narayanpura, Bengaluru – 560077 Zone</p>
           </div>
         </div>

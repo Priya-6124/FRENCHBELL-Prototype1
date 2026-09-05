@@ -96,7 +96,7 @@ class PureDb {
     if (sqlUpper.startsWith('INSERT INTO USERS')) {
       const [name, phone, email, password_hash, role] = params;
       const id = dbData.users.length ? Math.max(...dbData.users.map(u => u.id || 0)) + 1 : 1;
-      const user = { id, name, phone, email, password_hash, role: role || 'customer', created_at: new Date().toISOString() };
+      const user = { id, name, phone, email, password_hash, role: role || 'customer', whatsapp_opt_in: 1, created_at: new Date().toISOString() };
       dbData.users.push(user);
       saveStore();
       return { lastID: id };
@@ -279,6 +279,41 @@ class PureDb {
       return { changes: 1 };
     }
 
+    if (sqlUpper.startsWith('UPDATE USERS SET PASSWORD_HASH')) {
+      const [password_hash, email] = params;
+      const u = dbData.users.find(user => user.email && user.email.toLowerCase() === (email || '').toLowerCase());
+      if (u) {
+        u.password_hash = password_hash;
+        saveStore();
+        return { changes: 1 };
+      }
+      return { changes: 0 };
+    }
+
+    if (sqlUpper.startsWith('UPDATE USERS SET NAME')) {
+      const [name, whatsapp_opt, id] = params;
+      const u = dbData.users.find(user => user.id == id);
+      if (u) {
+        if (name) u.name = name;
+        if (whatsapp_opt !== undefined) u.whatsapp_opt_in = whatsapp_opt ? 1 : 0;
+        saveStore();
+        return { changes: 1 };
+      }
+      return { changes: 0 };
+    }
+
+    if (sqlUpper.startsWith('UPDATE ORDERS SET PAYMENT_STATUS')) {
+      const [payment_status, order_status, id] = params;
+      const o = dbData.orders.find(ord => ord.id == id || ord.order_number == id);
+      if (o) {
+        o.payment_status = payment_status;
+        if (order_status) o.order_status = order_status;
+        saveStore();
+        return { changes: 1 };
+      }
+      return { changes: 0 };
+    }
+
     return { changes: 0 };
   }
 
@@ -286,9 +321,15 @@ class PureDb {
     loadStore();
     const sqlUpper = sql.trim().toUpperCase();
 
+    if (sqlUpper.includes('FROM USERS WHERE EMAIL = ?') || sqlUpper.includes('WHERE EMAIL = ?') || sqlUpper.includes('WHERE LOWER(EMAIL)')) {
+      const [email] = params;
+      const cleanEmail = (email || '').trim().toLowerCase();
+      return dbData.users.find(u => u.email && u.email.toLowerCase() === cleanEmail) || null;
+    }
+
     if (sqlUpper.includes('FROM USERS WHERE PHONE') || sqlUpper.includes('WHERE PHONE = ?')) {
       const [phone, phone2] = params;
-      return dbData.users.find(u => u.phone === phone || (phone2 && u.email === phone2)) || null;
+      return dbData.users.find(u => u.phone === phone || (phone2 && (u.email === phone2 || u.phone === phone2))) || null;
     }
 
     if (sqlUpper.includes('FROM USERS WHERE ID = ?')) {

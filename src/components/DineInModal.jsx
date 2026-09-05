@@ -12,7 +12,7 @@ export default function DineInModal({ onClose }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     setDineInDetails({ tableNumber, numPeople: Number(numPeople), customerName, instructions });
-    addNotification('Dine-In Updated 🍽️', `Table #${tableNumber} configured for your order!`, 'success');
+    addNotification('Dine-In Updated', `Table #${tableNumber} configured for your order!`, 'success');
     if (onClose) onClose();
   };
 
@@ -27,8 +27,8 @@ export default function DineInModal({ onClose }) {
         </button>
 
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-12 h-12 rounded-2xl bg-french-gold/20 text-french-gold flex items-center justify-center text-2xl font-bold border border-french-gold/40">
-            🍽️
+          <div className="w-12 h-12 rounded-2xl bg-french-gold/20 text-french-gold flex items-center justify-center font-bold border border-french-gold/40">
+            <Utensils className="w-6 h-6 text-french-gold" />
           </div>
           <div>
             <h3 className="font-serif font-bold text-xl text-french-dark">Dine-In Table Details</h3>
@@ -94,7 +94,7 @@ export default function DineInModal({ onClose }) {
               rows="2"
               value={instructions}
               onChange={(e) => setInstructions(e.target.value)}
-              placeholder="e.g., Bring extra tissue, non-spicy"
+              placeholder="e.g., Extra napkins, non-spicy preparation"
               className="w-full px-4 py-2.5 rounded-xl border border-french-gold/30 bg-french-cream/60 text-sm focus:outline-none focus:border-french-gold"
             />
           </div>

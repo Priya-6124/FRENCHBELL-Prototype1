@@ -1,19 +1,31 @@
 import React from 'react';
 import { useApp } from '../context/AppContext';
+import {
+  Utensils,
+  Flame,
+  CircleDot,
+  Sandwich,
+  Layers,
+  Sparkles,
+  Boxes,
+  LayoutGrid,
+  Drumstick
+} from 'lucide-react';
+
+const CATEGORY_ICONS = {
+  all: LayoutGrid,
+  starters: Utensils,
+  strips: Drumstick,
+  momos: CircleDot,
+  burgers: Sandwich,
+  sandwich: Layers,
+  rolls: Sparkles,
+  loaded: Flame,
+  platters: Boxes
+};
 
 export default function CategoryTabs({ activeCategory, onSelectCategory }) {
   const { categories } = useApp();
-
-  const categoryIcons = {
-    'starters': '🍟',
-    'strips': '🍗',
-    'momos': '🥟',
-    'burgers': '🍔',
-    'sandwich': '🥪',
-    'rolls': '🌯',
-    'loaded': '🧀',
-    'platters': '🍱'
-  };
 
   return (
     <div className="w-full overflow-x-auto no-scrollbar py-2 my-4">
@@ -27,14 +39,14 @@ export default function CategoryTabs({ activeCategory, onSelectCategory }) {
               : 'bg-french-card text-french-dark border border-french-gold/25 hover:border-french-gold hover:bg-french-gold/10'
           }`}
         >
-          <span>✨</span>
+          <LayoutGrid className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-french-gold" />
           <span>All Cravings</span>
         </button>
 
         {/* Categories */}
         {categories.map((cat) => {
           const isSelected = activeCategory === cat.slug;
-          const emoji = categoryIcons[cat.slug] || '🍽️';
+          const IconComponent = CATEGORY_ICONS[cat.slug] || Utensils;
 
           return (
             <button
@@ -46,7 +58,7 @@ export default function CategoryTabs({ activeCategory, onSelectCategory }) {
                   : 'bg-french-card text-french-dark border border-french-gold/25 hover:border-french-gold hover:bg-french-gold/10'
               }`}
             >
-              <span className="text-base">{emoji}</span>
+              <IconComponent className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isSelected ? 'text-french-gold' : 'text-french-warm'}`} />
               <span>{cat.name}</span>
             </button>
           );

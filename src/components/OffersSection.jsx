@@ -1,98 +1,125 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useApp } from '../context/AppContext';
-import { Tag, Sparkles, Check, Gift } from 'lucide-react';
+import { Sparkles, ArrowRight, Tag, Clock } from 'lucide-react';
+import CurvedUnderline from './CurvedUnderline';
 
-export default function OffersSection() {
-  const { offers, setAppliedOffer, addNotification, setCartOpen } = useApp();
-  const [copiedCode, setCopiedCode] = useState(null);
+export default function OffersSection({ onExploreClick }) {
+  const { offers, setAppliedOffer, addNotification } = useApp();
 
-  const handleApplyOffer = (offer) => {
-    setAppliedOffer(offer);
-    setCopiedCode(offer.coupon_code);
-    addNotification('Coupon Applied! 🎉', `Coupon code "${offer.coupon_code}" activated!`, 'success');
-    setCartOpen(true);
-    setTimeout(() => setCopiedCode(null), 3000);
-  };
+  const defaultOffers = [
+    {
+      id: 101,
+      title: 'Zinger & Loaded Fries Special Duo',
+      description: 'Pair any signature burger with peri peri loaded fries for a flat ₹40 off.',
+      image_url: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=800&q=80',
+      discount_label: 'Flat ₹40 OFF',
+      validity: 'Weekend Special',
+      applicable_order_type: 'All Orders'
+    },
+    {
+      id: 102,
+      title: 'Steamed & Fried Momos Fiesta',
+      description: 'Try any 2 momo variants (Chicken or Veg) with authentic fiery dips.',
+      image_url: 'https://images.unsplash.com/photo-1534422298391-e4f8c172dddb?auto=format&fit=crop&w=800&q=80',
+      discount_label: '15% OFF',
+      validity: 'Mon – Thu Special',
+      applicable_order_type: 'Dine In & Takeaway'
+    },
+    {
+      id: 103,
+      title: 'Grand Sharing Platter Combo',
+      description: 'Loaded platter with crispy strips, momos, fries & dips starting at ₹179.',
+      image_url: 'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&w=800&q=80',
+      discount_label: 'Best Value',
+      validity: 'Everyday Special',
+      applicable_order_type: 'All Orders'
+    }
+  ];
+
+  const displayOffers = defaultOffers;
 
   return (
-    <section id="offers" className="py-16 bg-gradient-to-b from-french-brown to-french-dark text-french-cream relative overflow-hidden">
-      {/* Background Decor */}
-      <div className="absolute top-0 right-0 w-96 h-96 bg-french-gold/10 rounded-full blur-3xl pointer-events-none" />
+    <section id="offers" className="py-16 sm:py-20 bg-gradient-to-b from-french-dark to-[#1F1008] text-french-cream relative overflow-hidden">
+      {/* Background Glow */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-french-gold/5 rounded-full blur-[120px] pointer-events-none" />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-        
-        {/* Section Header */}
-        <div className="text-center max-w-2xl mx-auto mb-12 space-y-2">
+
+        {/* Section Heading */}
+        <div className="text-center max-w-2xl mx-auto mb-12 sm:mb-14 space-y-2">
           <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-french-gold/20 text-french-gold text-xs font-extrabold uppercase tracking-widest border border-french-gold/30">
-            <Gift className="w-4 h-4" />
-            <span>Special Promotional Deals</span>
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Curated Cafe Deals</span>
           </div>
 
-          <h2 className="font-serif font-extrabold text-3xl sm:text-4xl lg:text-5xl text-french-cream tracking-tight">
-            Deals Worth the Craving 🏷️
-          </h2>
+          <div>
+            <h2 className="font-serif font-extrabold text-3xl sm:text-4xl lg:text-5xl text-french-cream tracking-tight">
+              Deals Worth <span className="text-french-gold">The Craving</span>
+            </h2>
+            <div className="w-48 sm:w-56 mx-auto mt-1">
+              <CurvedUnderline className="text-french-gold h-3 sm:h-4" />
+            </div>
+          </div>
 
-          <p className="text-french-cream/80 text-sm sm:text-base">
-            Apply exclusive coupon codes at checkout for maximum savings on your order.
+          <p className="text-french-cream/80 text-xs sm:text-sm">
+            Handcrafted chef specials and pairing combos prepared fresh for dine-in, takeaway, and delivery.
           </p>
         </div>
 
         {/* Offers Cards Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {(offers || []).map((offer) => (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8">
+          {displayOffers.map((offer) => (
             <div
               key={offer.id}
-              className="relative p-6 rounded-3xl bg-gradient-to-br from-french-dark/90 via-french-brown/80 to-[#2A170F] border border-french-gold/30 shadow-2xl backdrop-blur-md flex flex-col justify-between group hover:border-french-gold transition-all duration-300 transform hover:-translate-y-1"
+              onClick={onExploreClick}
+              className="group relative rounded-3xl bg-french-card/10 border border-french-gold/30 overflow-hidden shadow-xl hover:shadow-2xl hover:border-french-gold transition-all duration-300 flex flex-col justify-between cursor-pointer transform hover:-translate-y-1 backdrop-blur-sm"
             >
-              <div className="space-y-4">
-                
-                {/* Top Badge */}
-                <div className="flex items-center justify-between">
-                  <span className="px-3 py-1 rounded-full bg-french-gold/20 text-french-gold text-[11px] font-extrabold uppercase tracking-wider border border-french-gold/30">
-                    {offer.discount_type === 'percentage' ? `${offer.discount_value}% OFF` : `₹${offer.discount_value} OFF`}
-                  </span>
-                  <Tag className="w-5 h-5 text-french-gold" />
+              {/* Offer Image Container */}
+              <div className="relative w-full h-52 sm:h-56 overflow-hidden bg-french-brown/30">
+                <img
+                  src={offer.image_url}
+                  alt={offer.title}
+                  className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                  loading="lazy"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-french-dark via-transparent to-transparent opacity-80" />
+
+                {/* Top Discount Tag */}
+                <div className="absolute top-3 left-3 px-3 py-1 rounded-full bg-french-gold text-french-dark font-black text-xs uppercase tracking-wider shadow-lg">
+                  {offer.discount_label}
                 </div>
 
-                {/* Offer Title & Description */}
-                <div>
-                  <h3 className="font-serif font-bold text-xl text-french-cream group-hover:text-french-gold transition-colors">
+                {/* Applicable Order Type */}
+                <div className="absolute top-3 right-3 px-2.5 py-1 rounded-full bg-french-dark/85 text-french-gold border border-french-gold/30 text-[10px] font-bold uppercase tracking-wider">
+                  {offer.applicable_order_type}
+                </div>
+              </div>
+
+              {/* Offer Content */}
+              <div className="p-6 flex-1 flex flex-col justify-between space-y-4">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-1.5 text-[11px] text-french-gold font-semibold">
+                    <Clock className="w-3.5 h-3.5" />
+                    <span>{offer.validity}</span>
+                  </div>
+
+                  <h3 className="font-serif font-bold text-lg sm:text-xl text-french-cream group-hover:text-french-gold transition-colors leading-snug">
                     {offer.title}
                   </h3>
-                  <p className="text-xs text-french-cream/70 mt-1.5 leading-relaxed">
+
+                  <p className="text-xs text-french-cream/75 leading-relaxed font-normal">
                     {offer.description}
                   </p>
                 </div>
 
-                {/* Min Order Notice */}
-                <div className="text-[11px] text-french-gold/90 font-medium">
-                  • Minimum Order: ₹{offer.minimum_order}
+                <div className="pt-3 border-t border-french-gold/20 flex items-center justify-between">
+                  <span className="text-xs font-bold text-french-gold uppercase tracking-wider">
+                    Order In Menu
+                  </span>
+                  <div className="p-2 rounded-full bg-french-gold text-french-dark group-hover:translate-x-1 transition-transform">
+                    <ArrowRight className="w-4 h-4" />
+                  </div>
                 </div>
-
-              </div>
-
-              {/* Coupon Code & Apply Button */}
-              <div className="mt-6 pt-4 border-t border-french-gold/20 flex items-center justify-between gap-3">
-                <div className="px-3.5 py-2 rounded-xl bg-french-dark border border-dashed border-french-gold/50 font-mono font-bold text-sm text-french-gold tracking-widest">
-                  {offer.coupon_code}
-                </div>
-
-                <button
-                  onClick={() => handleApplyOffer(offer)}
-                  className="px-4 py-2 rounded-xl bg-french-gold text-french-dark hover:bg-french-gold-hover font-extrabold text-xs uppercase tracking-wider shadow transition-all flex items-center gap-1.5"
-                >
-                  {copiedCode === offer.coupon_code ? (
-                    <>
-                      <Check className="w-4 h-4 stroke-[3]" />
-                      <span>Applied!</span>
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="w-4 h-4" />
-                      <span>Apply Offer</span>
-                    </>
-                  )}
-                </button>
               </div>
 
             </div>

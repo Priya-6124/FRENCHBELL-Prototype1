@@ -48,8 +48,8 @@ export default function MenuSection() {
         
         {/* Section Header */}
         <div className="text-center max-w-2xl mx-auto mb-8 space-y-2">
-          <span className="font-handwriting text-3xl text-french-gold font-bold block">
-            Pick Your Craving 🔔
+          <span className="font-serif text-2xl sm:text-3xl text-french-gold font-bold block">
+            Pick Your Craving
           </span>
           <h2 className="font-serif font-extrabold text-3xl sm:text-4xl lg:text-5xl text-french-dark tracking-tight">
             Complete Menu
@@ -89,11 +89,11 @@ export default function MenuSection() {
         ) : (
           /* Empty Search State */
           <div className="py-20 text-center space-y-4 max-w-md mx-auto">
-            <div className="w-20 h-20 mx-auto rounded-full bg-french-gold/15 text-french-gold flex items-center justify-center text-4xl">
-              🔍
+            <div className="w-20 h-20 mx-auto rounded-full bg-french-gold/15 text-french-gold flex items-center justify-center">
+              <Search className="w-8 h-8 text-french-gold" />
             </div>
             <h3 className="font-serif font-bold text-2xl text-french-dark">
-              Nothing tasty matched that search 🍔
+              No items matched your search
             </h3>
             <p className="text-french-muted text-sm">
               We couldn't find anything matching "{searchQuery}". Try searching for burgers, momos, fries, rolls or platters!

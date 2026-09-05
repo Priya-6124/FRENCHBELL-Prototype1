@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { X, Download, Smartphone, Printer, Check, Bell } from 'lucide-react';
+import { X, Download, Smartphone, Printer, Check, Bell, Receipt, MessageCircle } from 'lucide-react';
 
 export default function EReceiptModal({ order, onClose }) {
   const { addNotification } = useApp();
@@ -9,13 +9,13 @@ export default function EReceiptModal({ order, onClose }) {
   if (!order) return null;
 
   const handlePrintDownload = () => {
-    window.print();
-    addNotification('Receipt Downloaded 📄', 'Receipt saved for printing!', 'success');
+    window.open(`/api/receipts/${order.order_number}/download`, '_blank');
+    addNotification('Receipt Opened', 'Digital receipt generated for printing and PDF download', 'success');
   };
 
   const handleSendWhatsapp = async () => {
     setSentWhatsapp(true);
-    addNotification('WhatsApp Receipt Dispatched 📱', `Receipt sent to +91 ${order.phone || '9876543210'}!`, 'success');
+    addNotification('WhatsApp Receipt Dispatched', `Receipt link sent to +91 ${order.phone || '9876543210'}`, 'success');
     try {
       await fetch('/api/receipts/whatsapp', {
         method: 'POST',
@@ -28,7 +28,7 @@ export default function EReceiptModal({ order, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-french-dark/85 backdrop-blur-md animate-fadeIn">
       <div className="relative w-full max-w-md bg-french-card border-2 border-french-gold/40 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6 print:border-none print:shadow-none">
-        
+
         {/* Close Button */}
         {onClose && (
           <button
@@ -42,14 +42,14 @@ export default function EReceiptModal({ order, onClose }) {
         {/* Cafe Header & Logo */}
         <div className="text-center space-y-2 border-b border-french-gold/20 pb-4">
           <div className="w-16 h-16 mx-auto rounded-full overflow-hidden border border-french-gold p-0.5 bg-french-dark shadow-md">
-            <img src="/assets/logo.jfif" alt="French Bell Cafe" className="w-full h-full object-contain rounded-full" />
+            <img src="/assets/logo.jfif" alt="FrenchBell Cafe" className="w-full h-full object-contain rounded-full" />
           </div>
           <h2 className="font-serif font-extrabold text-2xl text-french-dark tracking-wide uppercase">
-            FRENCH BELL CAFE
+            FRENCHBELL CAFE
           </h2>
-          <p className="text-[11px] text-french-muted font-medium">
+          <p className="text-[11px] text-french-muted font-medium leading-relaxed">
             K. Narayanpura, Bengaluru – 560077, Karnataka <br />
-            Ph: +91 98765 43210 • Tax Receipt
+            Ph: +91 98765 43210 • Official Tax Invoice
           </p>
         </div>
 
@@ -98,7 +98,7 @@ export default function EReceiptModal({ order, onClose }) {
               ))
             ) : (
               <div className="flex justify-between text-french-dark font-medium">
-                <span>French Bell Combo Feast</span>
+                <span>FrenchBell Combo Meal</span>
                 <span>1 × ₹{order.total}</span>
                 <span className="font-bold font-mono">₹{order.total}</span>
               </div>
@@ -126,7 +126,7 @@ export default function EReceiptModal({ order, onClose }) {
 
         {/* Footer Tagline */}
         <div className="text-center font-handwriting text-xl text-french-gold font-bold">
-          Ding. Eat. Repeat. 🔔 Thank You!
+          Ding. Eat. Repeat. Thank You!
         </div>
 
         {/* Action Buttons */}
@@ -135,7 +135,7 @@ export default function EReceiptModal({ order, onClose }) {
             onClick={handlePrintDownload}
             className="py-3 px-3 rounded-2xl bg-french-cream border border-french-gold/40 text-french-dark font-bold text-xs uppercase tracking-wider hover:border-french-gold transition-all flex items-center justify-center gap-1.5"
           >
-            <Printer className="w-4 h-4 text-french-gold" />
+            <Download className="w-4 h-4 text-french-gold" />
             <span>Download PDF</span>
           </button>
 
@@ -146,11 +146,11 @@ export default function EReceiptModal({ order, onClose }) {
             {sentWhatsapp ? (
               <>
                 <Check className="w-4 h-4 stroke-[3]" />
-                <span>Sent to WA</span>
+                <span>Sent to WhatsApp</span>
               </>
             ) : (
               <>
-                <Smartphone className="w-4 h-4" />
+                <MessageCircle className="w-4 h-4" />
                 <span>WhatsApp Receipt</span>
               </>
             )}

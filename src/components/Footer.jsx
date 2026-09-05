@@ -1,28 +1,42 @@
 import React from 'react';
-import { Bell, Heart, MapPin, Phone, Mail } from 'lucide-react';
+import { useApp } from '../context/AppContext';
+import {
+  MapPin, Phone, Mail, Clock, ExternalLink, Heart,
+  Instagram, Facebook, MessageCircle, ShieldCheck
+} from 'lucide-react';
 
 export default function Footer({ onNavigate }) {
-  const scrollTo = (id) => {
-    if (onNavigate) onNavigate(id);
-    const el = document.getElementById(id);
-    if (el) el.scrollIntoView({ behavior: 'smooth' });
-  };
+  const { settings } = useApp();
+
+  const cafeName = settings?.cafe_name || 'FrenchBell Cafe';
+  const cafeAddress = settings?.cafe_address || 'K. Narayanpura, Bengaluru – 560077, Karnataka';
+  const cafePhone = settings?.cafe_phone || '+91 98765 43210';
+  const cafeEmail = settings?.cafe_email || 'hello@frenchbellcafe.com';
+  const cafeHours = settings?.cafe_hours || '11:00 AM – 11:30 PM';
+  const instagramUrl = settings?.instagram_url || 'https://instagram.com/frenchbellcafe';
+  const facebookUrl = settings?.facebook_url || 'https://facebook.com/frenchbellcafe';
+  const whatsappNumber = settings?.whatsapp_number || '+919876543210';
+  const cleanWaNumber = whatsappNumber.replace(/\D/g, '');
+  const whatsappLink = `https://wa.me/${cleanWaNumber}?text=Hello%20FrenchBell%20Cafe!`;
+  const mapEmbedUrl = settings?.map_embed_url || "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3886.5862211993245!2d77.6434587!3d13.0619938!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3bae196f7c9e0b1f%3A0x4a01c79e72809f6e!2sK%20Narayanpura%20Main%20Rd%2C%20Bengaluru%2C%20Karnataka%20560077!5e0!3m2!1sen!2sin!4v1700000000000!5m2!1sen!2sin";
+  const directionsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent('FrenchBell Cafe K Narayanpura Bengaluru')}`;
 
   return (
-    <footer className="bg-french-dark text-french-cream pt-16 pb-12 border-t border-french-gold/25 relative overflow-hidden">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-10 pb-12 border-b border-french-gold/20">
-          
-          {/* Col 1: Brand Info */}
-          <div className="lg:col-span-2 space-y-4">
+    <footer className="bg-french-dark text-french-cream pt-16 pb-10 border-t border-french-gold/25 relative overflow-hidden">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 space-y-12">
+
+        {/* Main Footer Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-10 lg:gap-8 pb-10 border-b border-french-gold/20">
+
+          {/* Col 1: Cafe Brand Info (4 cols) */}
+          <div className="lg:col-span-4 space-y-4">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-french-gold p-0.5 bg-french-dark gold-glow">
-                <img src="/assets/logo.jfif" alt="French Bell Cafe" className="w-full h-full object-contain rounded-full" />
+                <img src="/assets/logo.jfif" alt={cafeName} className="w-full h-full object-contain rounded-full" />
               </div>
               <div>
                 <h3 className="font-serif font-bold text-2xl text-french-cream tracking-wide">
-                  FRENCH BELL
+                  FRENCHBELL
                 </h3>
                 <span className="text-[10px] uppercase tracking-widest text-french-gold font-bold">
                   CAFE • BENGALURU
@@ -31,66 +45,133 @@ export default function Footer({ onNavigate }) {
             </div>
 
             <p className="text-xs text-french-cream/80 leading-relaxed max-w-sm font-normal">
-              Your favorite local cafe for loaded fries, crispy momos, gourmet burgers, sushi rolls & specialty platters. Served hot for Dine-In, Takeaway & Delivery!
+              Your favorite local cafe for loaded fries, crispy zinger burgers, steamed & fried momos, gourmet rolls, strips, and platters. Prepared fresh to order.
             </p>
 
-            <div className="font-handwriting text-3xl text-french-gold font-bold pt-2">
-              "Ding. Eat. Repeat." 🔔
+            <div className="pt-2 flex items-center space-x-3">
+              <a
+                href={instagramUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-2.5 rounded-full bg-french-brown/80 border border-french-gold/30 text-french-gold hover:bg-french-gold hover:text-french-dark transition-all"
+                title="Follow us on Instagram"
+                aria-label="Instagram"
+              >
+                <Instagram className="w-4 h-4" />
+              </a>
+              <a
+                href={whatsappLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-2.5 rounded-full bg-french-brown/80 border border-french-gold/30 text-french-gold hover:bg-french-gold hover:text-french-dark transition-all"
+                title="Chat with us on WhatsApp"
+                aria-label="WhatsApp"
+              >
+                <MessageCircle className="w-4 h-4" />
+              </a>
+              <a
+                href={facebookUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-2.5 rounded-full bg-french-brown/80 border border-french-gold/30 text-french-gold hover:bg-french-gold hover:text-french-dark transition-all"
+                title="Follow us on Facebook"
+                aria-label="Facebook"
+              >
+                <Facebook className="w-4 h-4" />
+              </a>
             </div>
           </div>
 
-          {/* Col 2: Quick Links */}
-          <div className="space-y-3">
-            <h4 className="font-serif font-bold text-base text-french-gold uppercase tracking-wider">
+          {/* Col 2: Quick Links (2 cols) - Strictly useful links, no Home/Menu/About */}
+          <div className="lg:col-span-2 space-y-3">
+            <h4 className="font-serif font-bold text-sm uppercase tracking-wider text-french-gold">
               Quick Links
             </h4>
-            <ul className="space-y-2 text-xs text-french-cream/80">
-              <li><button onClick={() => scrollTo('hero')} className="hover:text-french-gold transition-colors">Home</button></li>
-              <li><button onClick={() => scrollTo('menu')} className="hover:text-french-gold transition-colors">Complete Menu</button></li>
-              <li><button onClick={() => scrollTo('offers')} className="hover:text-french-gold transition-colors">Deals & Offers</button></li>
-              <li><button onClick={() => scrollTo('track-order')} className="hover:text-french-gold transition-colors">Track Order</button></li>
-              <li><button onClick={() => scrollTo('about')} className="hover:text-french-gold transition-colors">About Us</button></li>
+            <ul className="space-y-2 text-xs text-french-cream/80 font-medium">
+              <li>
+                <a href="#contact-info" className="hover:text-french-gold transition-colors">
+                  Contact Us
+                </a>
+              </li>
+              <li>
+                <a href="#privacy-policy" onClick={(e) => e.preventDefault()} className="hover:text-french-gold transition-colors">
+                  Privacy Policy
+                </a>
+              </li>
+              <li>
+                <a href="#terms-conditions" onClick={(e) => e.preventDefault()} className="hover:text-french-gold transition-colors">
+                  Terms & Conditions
+                </a>
+              </li>
+              <li>
+                <a href="#refund-policy" onClick={(e) => e.preventDefault()} className="hover:text-french-gold transition-colors">
+                  Refund & Cancellation Policy
+                </a>
+              </li>
             </ul>
           </div>
 
-          {/* Col 3: Legal Policies */}
-          <div className="space-y-3">
-            <h4 className="font-serif font-bold text-base text-french-gold uppercase tracking-wider">
-              Policies
+          {/* Col 3: Contact Details (3 cols) */}
+          <div id="contact-info" className="lg:col-span-3 space-y-3">
+            <h4 className="font-serif font-bold text-sm uppercase tracking-wider text-french-gold">
+              Contact & Hours
             </h4>
-            <ul className="space-y-2 text-xs text-french-cream/80">
-              <li><a href="#privacy" onClick={e => e.preventDefault()} className="hover:text-french-gold">Privacy Policy</a></li>
-              <li><a href="#terms" onClick={e => e.preventDefault()} className="hover:text-french-gold">Terms of Service</a></li>
-              <li><a href="#refund" onClick={e => e.preventDefault()} className="hover:text-french-gold">Refund & Cancellation</a></li>
-              <li><a href="#shipping" onClick={e => e.preventDefault()} className="hover:text-french-gold">Delivery Policy</a></li>
-              <li><a href="#hygiene" onClick={e => e.preventDefault()} className="hover:text-french-gold">Hygiene Standard</a></li>
-            </ul>
-          </div>
-
-          {/* Col 4: Location & Social */}
-          <div className="space-y-3">
-            <h4 className="font-serif font-bold text-base text-french-gold uppercase tracking-wider">
-              Cafe Address
-            </h4>
-            <p className="text-xs text-french-cream/80 leading-relaxed">
-              K. Narayanpura, Bengaluru – 560077, Karnataka
-            </p>
-            <div className="pt-2 flex items-center space-x-3 text-french-gold text-lg">
-              <span className="cursor-pointer hover:scale-110 transition-transform">📸</span>
-              <span className="cursor-pointer hover:scale-110 transition-transform">📱</span>
-              <span className="cursor-pointer hover:scale-110 transition-transform">📍</span>
+            <div className="space-y-2.5 text-xs text-french-cream/85">
+              <div className="flex items-start gap-2.5">
+                <MapPin className="w-4 h-4 text-french-gold shrink-0 mt-0.5" />
+                <span>{cafeAddress}</span>
+              </div>
+              <div className="flex items-center gap-2.5">
+                <Clock className="w-4 h-4 text-french-gold shrink-0" />
+                <span>{cafeHours}</span>
+              </div>
+              <div className="flex items-center gap-2.5 font-mono">
+                <Phone className="w-4 h-4 text-french-gold shrink-0" />
+                <span>{cafePhone}</span>
+              </div>
+              <div className="flex items-center gap-2.5">
+                <Mail className="w-4 h-4 text-french-gold shrink-0" />
+                <span>{cafeEmail}</span>
+              </div>
             </div>
+          </div>
+
+          {/* Col 4: Interactive Cafe Map (3 cols) */}
+          <div className="lg:col-span-3 space-y-2">
+            <h4 className="font-serif font-bold text-sm uppercase tracking-wider text-french-gold">
+              Find Our Cafe
+            </h4>
+            <div className="relative w-full h-36 rounded-2xl overflow-hidden border border-french-gold/30 shadow-md">
+              <iframe
+                title="FrenchBell Cafe Location Map"
+                src={mapEmbedUrl}
+                width="100%"
+                height="100%"
+                style={{ border: 0 }}
+                allowFullScreen=""
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+                className="filter contrast-95 opacity-90 hover:opacity-100 transition-opacity"
+              />
+            </div>
+            <a
+              href={directionsUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-[11px] font-bold text-french-gold hover:underline mt-1"
+            >
+              <span>Get Directions</span>
+              <ExternalLink className="w-3 h-3" />
+            </a>
           </div>
 
         </div>
 
-        {/* Bottom Bar */}
-        <div className="pt-8 flex flex-col sm:flex-row items-center justify-between text-xs text-french-cream/60 gap-4">
-          <p>© 2026 FRENCH BELL CAFE. All Rights Reserved.</p>
+        {/* Bottom Rights Bar */}
+        <div className="flex flex-col sm:flex-row items-center justify-between text-xs text-french-cream/60 gap-4">
+          <p>© 2026 {cafeName}. All Rights Reserved.</p>
           <p className="flex items-center gap-1">
-            <span>Crafted with</span>
-            <Heart className="w-3.5 h-3.5 text-french-gold fill-current" />
-            <span>for food lovers</span>
+            <span>Crafted for food lovers in Bengaluru</span>
           </p>
         </div>
 

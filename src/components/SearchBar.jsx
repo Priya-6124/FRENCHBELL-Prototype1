@@ -36,7 +36,7 @@ export default function SearchBar({
         {/* Match Count Badge */}
         <div className="font-serif font-bold text-french-warm">
           {searchQuery ? (
-            <span>Found <strong className="text-french-gold text-base">{matchCount}</strong> delicious matches 🍔</span>
+            <span>Found <strong className="text-french-gold text-base">{matchCount}</strong> matching items</span>
           ) : (
             <span>Showing <strong className="text-french-dark">{matchCount}</strong> menu items</span>
           )}

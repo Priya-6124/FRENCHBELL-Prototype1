@@ -12,7 +12,7 @@ export default function TakeawayModal({ onClose }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     setTakeawayDetails({ customerName, phone, pickupTime, instructions });
-    addNotification('Takeaway Preferences Saved 🛍️', `Estimated pickup in ${pickupTime}!`, 'success');
+    addNotification('Takeaway Preferences Saved', `Estimated pickup in ${pickupTime}!`, 'success');
     if (onClose) onClose();
   };
 
@@ -27,8 +27,8 @@ export default function TakeawayModal({ onClose }) {
         </button>
 
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-12 h-12 rounded-2xl bg-french-gold/20 text-french-gold flex items-center justify-center text-2xl font-bold border border-french-gold/40">
-            🛍️
+          <div className="w-12 h-12 rounded-2xl bg-french-gold/20 text-french-gold flex items-center justify-center border border-french-gold/40">
+            <ShoppingBag className="w-6 h-6 text-french-gold" />
           </div>
           <div>
             <h3 className="font-serif font-bold text-xl text-french-dark">Takeaway Pickup Details</h3>

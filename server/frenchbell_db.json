@@ -2,9 +2,9 @@
   "users": [
     {
       "id": 1,
-      "name": "French Bell Admin",
+      "name": "FrenchBell Operations Manager",
       "phone": "9876543210",
-      "email": "admin@frenchbell.com",
+      "email": "manager@frenchbellcafe.com",
       "password_hash": "$2a$10$3veqkuyyQQVNrgLIqeDcPegHFsTqAbE5Tm5wIH0c6YMbUa3fBy516",
       "role": "admin",
       "created_at": "2026-08-27T15:00:46.511Z"
@@ -35,6 +35,15 @@
       "password_hash": "$2a$08$ihCLzAv4uri234blGesiJeokKxml2WSfsf4QE9211MNutuvStaZuW",
       "role": "customer",
       "created_at": "2026-08-31T14:10:13.775Z"
+    },
+    {
+      "id": 5,
+      "name": "Foodie 4288",
+      "phone": "9620184288",
+      "email": null,
+      "password_hash": "$2a$08$dEVY36OKO1o0gUE5EgGOz.fJIrEBrTayTaViRpcwF.cNIZkYuHjCi",
+      "role": "customer",
+      "created_at": "2026-09-05T15:52:49.278Z"
     }
   ],
   "menu_categories": [
@@ -936,6 +945,28 @@
       "payment_method": "upi",
       "order_status": "received",
       "created_at": "2026-08-31T14:10:17.903Z"
+    },
+    {
+      "id": 8,
+      "order_number": "FB001",
+      "user_id": 5,
+      "order_type": "takeaway",
+      "table_number": null,
+      "num_people": null,
+      "customer_name": "Foodie 4288",
+      "phone": "9620184288",
+      "pickup_time": "20-30 mins",
+      "delivery_address": null,
+      "landmark": null,
+      "pincode": null,
+      "subtotal": 258,
+      "discount": 50,
+      "delivery_charge": 0,
+      "total": 218,
+      "payment_status": "dummy_upi_gpay",
+      "payment_method": "upi",
+      "order_status": "received",
+      "created_at": "2026-09-05T15:53:15.091Z"
     }
   ],
   "order_items": [
@@ -1041,6 +1072,16 @@
       "quantity": 1,
       "unit_price": 70,
       "total_price": 70
+    },
+    {
+      "id": 12,
+      "order_id": 8,
+      "menu_item_id": 5,
+      "item_name": "Crispy Classic Strips",
+      "variant": null,
+      "quantity": 2,
+      "unit_price": 129,
+      "total_price": 258
     }
   ],
   "payments": [
@@ -1103,6 +1144,14 @@
       "amount": 74,
       "method": "dummy_upi_gpay",
       "created_at": "2026-08-31T14:10:17.910Z"
+    },
+    {
+      "id": 8,
+      "order_id": 8,
+      "transaction_id": "TXN_1788623595400_732",
+      "amount": 218,
+      "method": "dummy_upi_gpay",
+      "created_at": "2026-09-05T15:53:15.408Z"
     }
   ],
   "offers": [
@@ -1193,6 +1242,11 @@
       "id": 7,
       "order_id": 7,
       "created_at": "2026-08-31T14:10:17.912Z"
+    },
+    {
+      "id": 8,
+      "order_id": 8,
+      "created_at": "2026-09-05T15:53:15.426Z"
     }
   ],
   "settings": [
@@ -1239,6 +1293,26 @@
     {
       "key": "whatsapp_enabled",
       "value": "1"
+    },
+    {
+      "key": "cafe_hours",
+      "value": "11:00 AM – 11:30 PM"
+    },
+    {
+      "key": "instagram_url",
+      "value": "https://instagram.com/frenchbellcafe"
+    },
+    {
+      "key": "whatsapp_number",
+      "value": "+919876543210"
+    },
+    {
+      "key": "facebook_url",
+      "value": "https://facebook.com/frenchbellcafe"
+    },
+    {
+      "key": "map_embed_url",
+      "value": "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3886.5862211993245!2d77.6434587!3d13.0619938!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3bae196f7c9e0b1f%3A0x4a01c79e72809f6e!2sK%20Narayanapura%20Main%20Rd%2C%20Bengaluru%2C%20Karnataka%20560077!5e0!3m2!1sen!2sin!4v1700000000000!5m2!1sen!2sin"
     }
   ]
 }

@@ -61,7 +61,7 @@ export default function BrandedFoodImage({ src, name, category, className = '', 
           {name || 'French Bell Specialty'}
         </span>
         <span className="font-sans text-[10px] tracking-wider uppercase text-french-gold/80 mt-1 font-semibold">
-          French Bell Cafe 🔔
+          French Bell Cafe
         </span>
       </div>
     );

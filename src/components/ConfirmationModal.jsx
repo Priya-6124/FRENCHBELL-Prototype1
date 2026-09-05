@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import confetti from 'canvas-confetti';
-import { Bell, CheckCircle2, ArrowRight, FileText, Smartphone } from 'lucide-react';
+import { Bell, CheckCircle2, ArrowRight, FileText, Download, ExternalLink } from 'lucide-react';
 
 export default function ConfirmationModal({ order, onClose, onTrackOrder, onViewReceipt }) {
   if (!order) return null;
@@ -16,10 +16,14 @@ export default function ConfirmationModal({ order, onClose, onTrackOrder, onView
     } catch (e) {}
   }, []);
 
+  const handleDirectDownload = () => {
+    window.open(`/api/receipts/${order.order_number}/download`, '_blank');
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-french-dark/85 backdrop-blur-md animate-fadeIn">
       <div className="relative w-full max-w-lg bg-french-card border-2 border-french-gold rounded-3xl p-6 sm:p-8 shadow-2xl text-center space-y-6 gold-border-glow">
-        
+
         {/* Animated Bell Ring Badge */}
         <div className="relative w-20 h-20 mx-auto rounded-full bg-gradient-to-b from-french-gold to-french-gold-hover text-french-dark flex items-center justify-center p-1 shadow-2xl gold-glow animate-bounce">
           <div className="w-full h-full rounded-full bg-french-dark flex items-center justify-center">
@@ -30,13 +34,13 @@ export default function ConfirmationModal({ order, onClose, onTrackOrder, onView
         {/* Headline */}
         <div>
           <span className="font-handwriting text-4xl text-french-gold font-bold block mb-1">
-            Ding! 🔔
+            Ding! Order Confirmed
           </span>
           <h2 className="font-serif font-extrabold text-3xl text-french-dark">
-            Your Order is In!
+            Your Order is In
           </h2>
           <p className="text-french-muted text-xs sm:text-sm mt-1">
-            The French Bell kitchen has received your order and started cooking.
+            FrenchBell kitchen has received your order and started preparation.
           </p>
         </div>
 
@@ -44,7 +48,7 @@ export default function ConfirmationModal({ order, onClose, onTrackOrder, onView
         <div className="p-4 rounded-2xl bg-french-cream border border-french-gold/30 text-left space-y-2">
           <div className="flex items-center justify-between text-xs font-bold text-french-muted uppercase tracking-wider">
             <span>Order Reference</span>
-            <span className="text-french-dark font-mono text-sm font-extrabold text-french-gold bg-french-dark px-2.5 py-0.5 rounded-md">
+            <span className="text-french-gold font-mono text-sm font-extrabold bg-french-dark px-2.5 py-0.5 rounded-md">
               #{order.order_number || 'FB001'}
             </span>
           </div>
@@ -82,6 +86,16 @@ export default function ConfirmationModal({ order, onClose, onTrackOrder, onView
           >
             <FileText className="w-4 h-4 text-french-gold" />
             <span>View Receipt</span>
+          </button>
+        </div>
+
+        <div>
+          <button
+            onClick={handleDirectDownload}
+            className="text-xs text-french-muted hover:text-french-gold font-semibold transition-colors underline inline-flex items-center gap-1.5"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Download Official Tax Receipt (HTML/PDF)</span>
           </button>
         </div>
 
