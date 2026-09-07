@@ -40,9 +40,9 @@ export function RevenueLineChart({ data }) {
 
 export function OrderTypeDonutChart({ data }) {
   const chartData = data || [
-    { name: 'Dine-In 🍽️', value: 35, color: '#D4AF37' },
-    { name: 'Takeaway 🛍️', value: 25, color: '#E07A5F' },
-    { name: 'Delivery 🛵', value: 40, color: '#2E7D32' }
+    { name: 'Dine-In', value: 35, color: '#D4AF37' },
+    { name: 'Takeaway', value: 25, color: '#E07A5F' },
+    { name: 'Delivery', value: 40, color: '#2E7D32' }
   ];
 
   return (

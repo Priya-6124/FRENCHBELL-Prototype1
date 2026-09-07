@@ -55,8 +55,8 @@ export default function Hero({ onExploreClick }) {
               <span className="text-french-gold inline-block">FrenchBell answered.</span>
             </h1>
 
-            <div className="w-48 sm:w-60">
-              <CurvedUnderline className="text-french-gold h-2.5 sm:h-3.5" />
+            <div className="w-48 sm:w-64 mt-1">
+              <CurvedUnderline className="text-french-gold h-3.5 sm:h-5" />
             </div>
 
             <p className="text-xs sm:text-sm text-french-cream/80 leading-relaxed pt-1">

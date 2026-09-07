@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
-import { Tag, Plus, Trash2, CheckCircle2, Sparkles, X, Gift } from 'lucide-react';
+import { Tag, Plus, Trash2, CheckCircle2, Sparkles, X, Gift, Check } from 'lucide-react';
 
 export default function OfferManager() {
   const { offers, setOffers, addNotification } = useApp();
@@ -29,7 +29,7 @@ export default function OfferManager() {
     };
 
     setOffers([newOffer, ...offers]);
-    addNotification('Coupon Code Live 🎉', `Coupon ${newOffer.coupon_code} is active for customers!`, 'success');
+    addNotification('Coupon Code Live', `Coupon ${newOffer.coupon_code} is active for customers!`, 'success');
 
     try {
       await fetch('/api/offers', {
@@ -104,8 +104,9 @@ export default function OfferManager() {
                 <span className="px-3 py-1 rounded-xl bg-french-dark text-french-gold font-mono font-black text-sm tracking-wider border border-french-gold/40 shadow-sm">
                   {o.coupon_code}
                 </span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
-                  Active ✓
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 inline-flex items-center gap-1">
+                  <Check className="w-3 h-3" />
+                  <span>Active</span>
                 </span>
               </div>
 
@@ -218,9 +219,10 @@ export default function OfferManager() {
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-3 rounded-xl bg-french-dark text-french-gold font-extrabold uppercase tracking-wider hover:bg-french-gold hover:text-french-dark transition-all shadow"
+                  className="flex-1 py-3 rounded-xl bg-french-dark text-french-gold font-extrabold uppercase tracking-wider hover:bg-french-gold hover:text-french-dark transition-all shadow flex items-center justify-center gap-1.5"
                 >
-                  Save & Publish 🏷️
+                  <Tag className="w-3.5 h-3.5" />
+                  <span>Save & Publish</span>
                 </button>
               </div>
             </form>

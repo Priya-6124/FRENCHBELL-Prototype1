@@ -1,9 +1,9 @@
 import React from 'react';
 import { useApp } from '../context/AppContext';
 import {
-  MapPin, Phone, Mail, Clock, ExternalLink, Heart,
-  Instagram, Facebook, MessageCircle, ShieldCheck
+  MapPin, Phone, Mail, Clock, ExternalLink, Heart, ShieldCheck
 } from 'lucide-react';
+import { WhatsAppIcon, InstagramIcon, FacebookIcon } from './BrandIcons';
 
 export default function Footer({ onNavigate }) {
   const { settings } = useApp();
@@ -18,8 +18,9 @@ export default function Footer({ onNavigate }) {
   const whatsappNumber = settings?.whatsapp_number || '+919876543210';
   const cleanWaNumber = whatsappNumber.replace(/\D/g, '');
   const whatsappLink = `https://wa.me/${cleanWaNumber}?text=Hello%20FrenchBell%20Cafe!`;
-  const mapEmbedUrl = settings?.map_embed_url || "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3886.5862211993245!2d77.6434587!3d13.0619938!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3bae196f7c9e0b1f%3A0x4a01c79e72809f6e!2sK%20Narayanpura%20Main%20Rd%2C%20Bengaluru%2C%20Karnataka%20560077!5e0!3m2!1sen!2sin!4v1700000000000!5m2!1sen!2sin";
-  const directionsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent('FrenchBell Cafe K Narayanpura Bengaluru')}`;
+  const mapUrl = settings?.map_url || "https://maps.app.goo.gl/w4z22NYUUiSxUxiJ6";
+  const mapEmbedUrl = settings?.map_embed_url || "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3886.6346914561876!2d77.6416629!3d13.0600021!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3bae1700505cef43%3A0xc792bc75b8cb8b90!2sFrench%20Bell%2C%20Kristu%20Jayanti%20College!5e0!3m2!1sen!2sin!4v1710000000000!5m2!1sen!2sin";
+  const directionsUrl = mapUrl;
 
   return (
     <footer className="bg-french-dark text-french-cream pt-16 pb-10 border-t border-french-gold/25 relative overflow-hidden">
@@ -48,37 +49,43 @@ export default function Footer({ onNavigate }) {
               Your favorite local cafe for loaded fries, crispy zinger burgers, steamed & fried momos, gourmet rolls, strips, and platters. Prepared fresh to order.
             </p>
 
-            <div className="pt-2 flex items-center space-x-3">
-              <a
-                href={instagramUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="p-2.5 rounded-full bg-french-brown/80 border border-french-gold/30 text-french-gold hover:bg-french-gold hover:text-french-dark transition-all"
-                title="Follow us on Instagram"
-                aria-label="Instagram"
-              >
-                <Instagram className="w-4 h-4" />
-              </a>
-              <a
-                href={whatsappLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="p-2.5 rounded-full bg-french-brown/80 border border-french-gold/30 text-french-gold hover:bg-french-gold hover:text-french-dark transition-all"
-                title="Chat with us on WhatsApp"
-                aria-label="WhatsApp"
-              >
-                <MessageCircle className="w-4 h-4" />
-              </a>
-              <a
-                href={facebookUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="p-2.5 rounded-full bg-french-brown/80 border border-french-gold/30 text-french-gold hover:bg-french-gold hover:text-french-dark transition-all"
-                title="Follow us on Facebook"
-                aria-label="Facebook"
-              >
-                <Facebook className="w-4 h-4" />
-              </a>
+            {/* Actual Social App Icons */}
+            <div className="pt-1 space-y-2">
+              <span className="text-[10px] uppercase font-bold tracking-wider text-french-gold/90 block">
+                Connect With Us
+              </span>
+              <div className="flex items-center gap-3">
+                <a
+                  href={instagramUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:scale-110 transition-transform shadow-md rounded-xl overflow-hidden"
+                  title="Follow us on Instagram"
+                  aria-label="Instagram"
+                >
+                  <InstagramIcon className="w-9 h-9" />
+                </a>
+                <a
+                  href={whatsappLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:scale-110 transition-transform shadow-md rounded-xl overflow-hidden"
+                  title="Chat with us on WhatsApp"
+                  aria-label="WhatsApp"
+                >
+                  <WhatsAppIcon className="w-9 h-9" />
+                </a>
+                <a
+                  href={facebookUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:scale-110 transition-transform shadow-md rounded-xl overflow-hidden"
+                  title="Follow us on Facebook"
+                  aria-label="Facebook"
+                >
+                  <FacebookIcon className="w-9 h-9" />
+                </a>
+              </div>
             </div>
           </div>
 
@@ -141,7 +148,7 @@ export default function Footer({ onNavigate }) {
             <h4 className="font-serif font-bold text-sm uppercase tracking-wider text-french-gold">
               Find Our Cafe
             </h4>
-            <div className="relative w-full h-36 rounded-2xl overflow-hidden border border-french-gold/30 shadow-md">
+            <div className="relative w-full h-36 rounded-2xl overflow-hidden border border-french-gold/30 shadow-md group">
               <iframe
                 title="FrenchBell Cafe Location Map"
                 src={mapEmbedUrl}
@@ -151,7 +158,7 @@ export default function Footer({ onNavigate }) {
                 allowFullScreen=""
                 loading="lazy"
                 referrerPolicy="no-referrer-when-downgrade"
-                className="filter contrast-95 opacity-90 hover:opacity-100 transition-opacity"
+                className="filter contrast-95 opacity-90 group-hover:opacity-100 transition-opacity"
               />
             </div>
             <a
@@ -169,7 +176,7 @@ export default function Footer({ onNavigate }) {
 
         {/* Bottom Rights Bar */}
         <div className="flex flex-col sm:flex-row items-center justify-between text-xs text-french-cream/60 gap-4">
-          <p>© 2026 {cafeName}. All Rights Reserved.</p>
+          <p>&copy; 2026 {cafeName}. All Rights Reserved.</p>
           <p className="flex items-center gap-1">
             <span>Crafted for food lovers in Bengaluru</span>
           </p>

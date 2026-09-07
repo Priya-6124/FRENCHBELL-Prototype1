@@ -2,14 +2,14 @@ import React, { useState, useRef } from 'react';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import BrandedFoodImage from '../BrandedFoodImage';
-import { Image as ImageIcon, Plus, Trash2, Upload, Sparkles, X, Bell } from 'lucide-react';
+import { Image as ImageIcon, Plus, Trash2, Upload, Sparkles, X, Bell, Check } from 'lucide-react';
 
 const LOCAL_BANNER_PRESETS = [
-  { label: '🍔 Burger Feast', path: '/assets/food/burger.jpg' },
-  { label: '🍟 Cheesy Fries', path: '/assets/food/fries.jpg' },
-  { label: '🍗 Sizzling Strips', path: '/assets/food/strips.jpg' },
-  { label: '🥟 Momo Platter', path: '/assets/food/momos.jpg' },
-  { label: '🍱 Grand Sampler', path: '/assets/food/platter.jpg' },
+  { label: 'Burger Feast', path: '/assets/food/burger.jpg' },
+  { label: 'Cheesy Fries', path: '/assets/food/fries.jpg' },
+  { label: 'Sizzling Strips', path: '/assets/food/strips.jpg' },
+  { label: 'Momo Platter', path: '/assets/food/momos.jpg' },
+  { label: 'Grand Sampler', path: '/assets/food/platter.jpg' },
 ];
 
 export default function AdvertManager() {
@@ -46,7 +46,7 @@ export default function AdvertManager() {
     };
 
     setAdvertisements([newAd, ...advertisements]);
-    addNotification('Banner Published 📢', `Live customer announcement: "${title}"`, 'success');
+    addNotification('Banner Published', `Live customer announcement: "${title}"`, 'success');
 
     try {
       await fetch('/api/advertisements', {
@@ -109,8 +109,9 @@ export default function AdvertManager() {
           <div key={ad.id} className="p-4 rounded-3xl bg-french-card border border-french-gold/30 shadow-md space-y-3 relative overflow-hidden flex flex-col justify-between">
             <div className="w-full h-44 rounded-2xl overflow-hidden border border-french-gold/20 relative">
               <BrandedFoodImage src={ad.image_url} name={ad.title} category="banner" className="w-full h-full object-cover" />
-              <div className="absolute top-2 right-2 px-2 py-0.5 rounded-md bg-emerald-600 text-white text-[10px] font-bold">
-                Live on Site ✓
+              <div className="absolute top-2 right-2 px-2 py-0.5 rounded-md bg-emerald-600 text-white text-[10px] font-bold flex items-center gap-1">
+                <Check className="w-3 h-3" />
+                <span>Live on Site</span>
               </div>
             </div>
 
@@ -154,7 +155,7 @@ export default function AdvertManager() {
                   type="text"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  placeholder="e.g. 🍕 Weekend Loaded Feast 20% Off!"
+                  placeholder="e.g. Weekend Loaded Feast 20% Off!"
                   className="w-full px-4 py-2.5 rounded-xl border border-french-gold/30 bg-french-cream/70 text-sm focus:outline-none focus:border-french-gold"
                   required
                 />
@@ -236,7 +237,7 @@ export default function AdvertManager() {
                   type="submit"
                   className="px-6 py-2.5 rounded-xl bg-french-gold text-french-dark font-extrabold text-xs uppercase tracking-wider hover:bg-french-gold-hover shadow"
                 >
-                  Publish Banner & Alert Customers 📢
+                  Publish Banner & Alert Customers
                 </button>
               </div>
 

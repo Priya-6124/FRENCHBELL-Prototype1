@@ -86,7 +86,7 @@ export default function MenuPage({ onBackToHome }) {
               FrenchBell <span className="text-french-warm">Menu</span>
             </h1>
             <div className="w-36 sm:w-44 mt-1">
-              <CurvedUnderline className="text-french-gold h-3" />
+              <CurvedUnderline className="text-french-gold h-4 sm:h-5" />
             </div>
           </div>
 

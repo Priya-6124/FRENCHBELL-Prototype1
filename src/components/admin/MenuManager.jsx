@@ -5,14 +5,14 @@ import BrandedFoodImage from '../BrandedFoodImage';
 import { Plus, Edit, Trash2, CheckCircle2, XCircle, Search, Sparkles, Upload, Image as ImageIcon, X } from 'lucide-react';
 
 const LOCAL_FOOD_PRESETS = [
-  { label: '🍔 Gourmet Burger', path: '/assets/food/burger.jpg' },
-  { label: '🍟 Crispy Fries', path: '/assets/food/fries.jpg' },
-  { label: '🥟 Dumplings / Momos', path: '/assets/food/momos.jpg' },
-  { label: '🍗 Crispy Strips', path: '/assets/food/strips.jpg' },
-  { label: '🥪 Club Sandwich', path: '/assets/food/sandwich.jpg' },
-  { label: '🌯 Kathi / Shawarma Roll', path: '/assets/food/rolls.jpg' },
-  { label: '🧀 Loaded Fries Bowl', path: '/assets/food/loaded.jpg' },
-  { label: '🍱 Grand Sampler Platter', path: '/assets/food/platter.jpg' },
+  { label: 'Gourmet Burger', path: '/assets/food/burger.jpg' },
+  { label: 'Crispy Fries', path: '/assets/food/fries.jpg' },
+  { label: 'Dumplings / Momos', path: '/assets/food/momos.jpg' },
+  { label: 'Crispy Strips', path: '/assets/food/strips.jpg' },
+  { label: 'Club Sandwich', path: '/assets/food/sandwich.jpg' },
+  { label: 'Kathi / Shawarma Roll', path: '/assets/food/rolls.jpg' },
+  { label: 'Loaded Fries Bowl', path: '/assets/food/loaded.jpg' },
+  { label: 'Grand Sampler Platter', path: '/assets/food/platter.jpg' },
 ];
 
 export default function MenuManager() {
@@ -50,7 +50,7 @@ export default function MenuManager() {
         },
         body: JSON.stringify({ available: newVal })
       });
-      addNotification('Inventory Updated 🍔', `Item marked as ${newVal === 1 ? 'Available' : 'SOLD OUT'}`, 'info');
+      addNotification('Inventory Updated', `Item marked as ${newVal === 1 ? 'Available' : 'SOLD OUT'}`, 'info');
     } catch (e) {}
   };
 
@@ -114,10 +114,10 @@ export default function MenuManager() {
 
     if (editingItem) {
       setMenuItems(prev => prev.map(i => i.id === editingItem.id ? newItem : i));
-      addNotification('Menu Item Updated ✏️', `${newItem.name} saved!`, 'success');
+      addNotification('Menu Item Updated', `${newItem.name} saved!`, 'success');
     } else {
       setMenuItems(prev => [newItem, ...prev]);
-      addNotification('Menu Item Added 🎉', `${newItem.name} added to menu!`, 'success');
+      addNotification('Menu Item Added', `${newItem.name} added to menu!`, 'success');
     }
 
     try {
@@ -256,10 +256,11 @@ export default function MenuManager() {
                     {item.category_slug || 'Specialty'}
                   </td>
                   <td className="py-3 px-4">
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase inline-flex items-center gap-1.5 ${
                       item.veg_type === 'veg' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
                     }`}>
-                      {item.veg_type === 'veg' ? '🟢 Veg' : '🔴 Non-Veg'}
+                      <span className={`w-1.5 h-1.5 rounded-full ${item.veg_type === 'veg' ? 'bg-emerald-600' : 'bg-red-600'}`} />
+                      <span>{item.veg_type === 'veg' ? 'Veg' : 'Non-Veg'}</span>
                     </span>
                   </td>
                   <td className="py-3 px-4 font-mono font-bold">
@@ -274,7 +275,7 @@ export default function MenuManager() {
                           : 'bg-red-600 text-white shadow-sm hover:bg-red-700'
                       }`}
                     >
-                      {item.available === 1 ? 'In Stock ✓' : 'Sold Out ✕'}
+                      {item.available === 1 ? 'In Stock' : 'Sold Out'}
                     </button>
                   </td>
                   <td className="py-3 px-4 text-right space-x-2">
@@ -351,8 +352,8 @@ export default function MenuManager() {
                     onChange={(e) => setForm({ ...form, veg_type: e.target.value })}
                     className="w-full px-3 py-2.5 rounded-xl border border-french-gold/30 bg-french-cream/70 text-sm focus:outline-none focus:border-french-gold"
                   >
-                    <option value="veg">🟢 Pure Veg</option>
-                    <option value="non-veg">🔴 Non-Veg</option>
+                    <option value="veg">Pure Veg</option>
+                    <option value="non-veg">Non-Veg</option>
                   </select>
                 </div>
               </div>

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { X, Download, FileSpreadsheet, FileText, CheckCircle2, Sparkles } from 'lucide-react';
+import { X, Download, FileSpreadsheet, FileText, CheckCircle2, Sparkles, BarChart3 } from 'lucide-react';
 
 export default function ExportModal({ onClose }) {
   const { addNotification } = useApp();
@@ -31,7 +31,7 @@ export default function ExportModal({ onClose }) {
       link.click();
       document.body.removeChild(link);
 
-      addNotification('Report Exported 📊', `${reportType.toUpperCase()} report generated & downloaded!`, 'success');
+      addNotification('Report Exported', `${reportType.toUpperCase()} report generated & downloaded!`, 'success');
       if (onClose) onClose();
     }, 1200);
   };
@@ -44,7 +44,7 @@ export default function ExportModal({ onClose }) {
         <div className="flex items-center justify-between border-b border-french-gold/20 pb-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-french-gold/20 text-french-gold flex items-center justify-center font-bold">
-              📊
+              <BarChart3 className="w-5 h-5 text-french-gold" />
             </div>
             <div>
               <h3 className="font-serif font-extrabold text-xl text-french-dark">

@@ -1,28 +1,15 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useApp } from '../context/AppContext';
-import { X, Download, Smartphone, Printer, Check, Bell, Receipt, MessageCircle } from 'lucide-react';
+import { X, Download } from 'lucide-react';
 
 export default function EReceiptModal({ order, onClose }) {
   const { addNotification } = useApp();
-  const [sentWhatsapp, setSentWhatsapp] = useState(false);
 
   if (!order) return null;
 
-  const handlePrintDownload = () => {
+  const handleDownloadPdf = () => {
     window.open(`/api/receipts/${order.order_number}/download`, '_blank');
-    addNotification('Receipt Opened', 'Digital receipt generated for printing and PDF download', 'success');
-  };
-
-  const handleSendWhatsapp = async () => {
-    setSentWhatsapp(true);
-    addNotification('WhatsApp Receipt Dispatched', `Receipt link sent to +91 ${order.phone || '9876543210'}`, 'success');
-    try {
-      await fetch('/api/receipts/whatsapp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ order_number: order.order_number, phone: order.phone })
-      });
-    } catch (e) {}
+    addNotification('Receipt Downloaded', 'Digital PDF receipt generated successfully', 'success');
   };
 
   return (
@@ -33,7 +20,8 @@ export default function EReceiptModal({ order, onClose }) {
         {onClose && (
           <button
             onClick={onClose}
-            className="absolute top-4 right-4 p-2 rounded-full bg-french-cream text-french-dark hover:bg-french-gold/20 print:hidden"
+            className="absolute top-4 right-4 p-2 rounded-full bg-french-cream text-french-dark hover:bg-french-gold/20 print:hidden transition-colors"
+            aria-label="Close Receipt"
           >
             <X className="w-5 h-5" />
           </button>
@@ -129,31 +117,14 @@ export default function EReceiptModal({ order, onClose }) {
           Ding. Eat. Repeat. Thank You!
         </div>
 
-        {/* Action Buttons */}
-        <div className="grid grid-cols-2 gap-3 print:hidden pt-2">
+        {/* Action Button: ONLY Download PDF */}
+        <div className="print:hidden pt-2">
           <button
-            onClick={handlePrintDownload}
-            className="py-3 px-3 rounded-2xl bg-french-cream border border-french-gold/40 text-french-dark font-bold text-xs uppercase tracking-wider hover:border-french-gold transition-all flex items-center justify-center gap-1.5"
+            onClick={handleDownloadPdf}
+            className="w-full py-3.5 px-4 rounded-2xl bg-french-dark text-french-gold font-bold text-xs uppercase tracking-wider hover:bg-french-gold hover:text-french-dark transition-all flex items-center justify-center gap-2 shadow-lg border border-french-gold/30 hover:border-french-gold group active:scale-[0.99]"
           >
-            <Download className="w-4 h-4 text-french-gold" />
+            <Download className="w-4 h-4 text-french-gold group-hover:text-french-dark transition-colors" />
             <span>Download PDF</span>
-          </button>
-
-          <button
-            onClick={handleSendWhatsapp}
-            className="py-3 px-3 rounded-2xl bg-emerald-600 text-white font-bold text-xs uppercase tracking-wider hover:bg-emerald-700 transition-all flex items-center justify-center gap-1.5 shadow"
-          >
-            {sentWhatsapp ? (
-              <>
-                <Check className="w-4 h-4 stroke-[3]" />
-                <span>Sent to WhatsApp</span>
-              </>
-            ) : (
-              <>
-                <MessageCircle className="w-4 h-4" />
-                <span>WhatsApp Receipt</span>
-              </>
-            )}
           </button>
         </div>
 

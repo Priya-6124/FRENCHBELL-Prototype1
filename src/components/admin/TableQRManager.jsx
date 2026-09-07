@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { QrCode, Download, ExternalLink, Printer, Sparkles, CheckCircle, Utensils } from 'lucide-react';
+import { QrCode, Download, ExternalLink, Printer, Sparkles, CheckCircle, Utensils, Bell, Camera } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
 export default function TableQRManager() {
@@ -92,8 +92,8 @@ export default function TableQRManager() {
     ctx.arc(300, 415, 35, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = '#1A0F0A';
-    ctx.font = 'bold 26px sans-serif';
-    ctx.fillText('🔔', 300, 424);
+    ctx.font = 'bold 20px Georgia, serif';
+    ctx.fillText('FB', 300, 422);
 
     // Text Instructions
     ctx.fillStyle = '#FFF8DC';
@@ -114,7 +114,7 @@ export default function TableQRManager() {
     link.href = canvas.toDataURL('image/png');
     link.click();
 
-    addNotification('QR Standee Downloaded 📥', `Table #${tableNum} QR standee saved to your device!`, 'success');
+    addNotification('QR Standee Downloaded', `Table #${tableNum} QR standee saved to your device!`, 'success');
   };
 
   const handleTestDineIn = (tableNum) => {
@@ -259,13 +259,16 @@ export default function TableQRManager() {
             <div className="bg-white p-4 rounded-2xl shadow-inner mx-auto w-44 h-44 flex flex-col items-center justify-center relative border border-french-gold/40">
               <QrCode className="w-36 h-36 text-french-dark" />
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <span className="text-xl bg-french-gold text-french-dark p-1 rounded-full shadow">🔔</span>
+                <span className="bg-french-gold text-french-dark p-1.5 rounded-full shadow flex items-center justify-center">
+                  <Bell className="w-4 h-4 text-french-dark" />
+                </span>
               </div>
             </div>
 
             <div>
-              <p className="font-serif font-bold text-sm text-french-gold">
-                Scan with Phone Camera 📱
+              <p className="font-serif font-bold text-sm text-french-gold flex items-center justify-center gap-1.5">
+                <Camera className="w-4 h-4" />
+                <span>Scan with Phone Camera</span>
               </p>
               <p className="text-[10px] text-french-cream/70 mt-0.5">
                 Browse menu & pay right from your seat.

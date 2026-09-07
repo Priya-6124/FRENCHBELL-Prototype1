@@ -72,8 +72,8 @@ export default function CouponsSection({ onExploreClick }) {
             <h2 className="font-serif font-extrabold text-3xl sm:text-4xl text-french-dark tracking-tight">
               Exclusive Cafe <span className="text-french-warm">Coupons</span>
             </h2>
-            <div className="w-36 sm:w-44 mx-auto mt-1">
-              <CurvedUnderline className="text-french-gold h-3" />
+            <div className="w-40 sm:w-52 mx-auto mt-1">
+              <CurvedUnderline className="text-french-caramel h-4 sm:h-5" />
             </div>
           </div>
 

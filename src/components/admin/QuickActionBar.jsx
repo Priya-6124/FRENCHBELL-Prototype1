@@ -1,9 +1,9 @@
 import React from 'react';
-import { Plus, ShoppingBag, Tag, Image, Download, Bike, QrCode } from 'lucide-react';
+import { Plus, ShoppingBag, Tag, Image, Download, Bike, QrCode, Zap } from 'lucide-react';
 
 export default function QuickActionBar({ onAction }) {
   const actions = [
-    { id: 'add-item', label: '+ Add Menu Item', icon: Plus, tab: 'menu-manager' },
+    { id: 'add-item', label: 'Add Menu Item', icon: Plus, tab: 'menu-manager' },
     { id: 'view-orders', label: 'Live Orders', icon: ShoppingBag, tab: 'live-orders' },
     { id: 'table-qr', label: 'Table QRs', icon: QrCode, tab: 'table-qr' },
     { id: 'create-offer', label: 'Create Offer', icon: Tag, tab: 'offers-manager' },
@@ -13,8 +13,9 @@ export default function QuickActionBar({ onAction }) {
 
   return (
     <div className="p-4 rounded-2xl bg-french-card border border-french-gold/30 shadow-md">
-      <h4 className="text-xs font-extrabold uppercase tracking-wider text-french-muted mb-3">
-        ⚡ Cafe Operations Quick Actions
+      <h4 className="text-xs font-extrabold uppercase tracking-wider text-french-muted mb-3 flex items-center gap-1.5">
+        <Zap className="w-3.5 h-3.5 text-french-gold" />
+        <span>Cafe Operations Quick Actions</span>
       </h4>
       <div className="flex flex-wrap items-center gap-3">
         {actions.map((act) => {

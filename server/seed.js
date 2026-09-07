@@ -2,7 +2,7 @@ import getDb from './db.js';
 import bcrypt from 'bcryptjs';
 
 async function seedDatabase() {
-  console.log('🌱 Starting French Bell Cafe Database Seeding...');
+  console.log('[Seed] Starting French Bell Cafe Database Seeding...');
   const db = await getDb();
 
   // Clear tables
@@ -294,9 +294,9 @@ async function seedDatabase() {
     `, [orderId]);
   }
 
-  console.log('✅ French Bell Database Seeding Complete!');
+  console.log('[Seed] French Bell Database Seeding Complete!');
 }
 
 seedDatabase().catch(err => {
-  console.error('❌ Seeding Error:', err);
+  console.error('[Seed Error]:', err);
 });

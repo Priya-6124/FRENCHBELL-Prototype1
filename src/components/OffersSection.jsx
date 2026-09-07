@@ -56,8 +56,8 @@ export default function OffersSection({ onExploreClick }) {
             <h2 className="font-serif font-extrabold text-3xl sm:text-4xl lg:text-5xl text-french-cream tracking-tight">
               Deals Worth <span className="text-french-gold">The Craving</span>
             </h2>
-            <div className="w-48 sm:w-56 mx-auto mt-1">
-              <CurvedUnderline className="text-french-gold h-3 sm:h-4" />
+            <div className="w-52 sm:w-64 mx-auto mt-1">
+              <CurvedUnderline className="text-french-caramel-light h-4 sm:h-5" />
             </div>
           </div>
 

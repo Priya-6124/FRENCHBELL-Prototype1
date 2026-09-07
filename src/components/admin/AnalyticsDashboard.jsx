@@ -37,7 +37,7 @@ export default function AnalyticsDashboard() {
       <div className="p-6 rounded-3xl bg-gradient-to-r from-french-dark via-[#2B160E] to-french-brown text-french-cream border border-french-gold/30 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
           <h2 className="font-serif font-extrabold text-2xl sm:text-3xl text-french-cream">
-            Good evening, Admin 👋
+            Good evening, Admin
           </h2>
           <p className="text-french-cream/80 text-xs sm:text-sm mt-1">
             Here's what's happening at <strong>French Bell Cafe</strong> today.
@@ -206,8 +206,9 @@ export default function AnalyticsDashboard() {
       {/* Product Performance Bar Chart */}
       <div className="p-6 rounded-3xl bg-french-card border border-french-gold/30 shadow-lg space-y-4">
         <div className="border-b border-french-gold/15 pb-4">
-          <h3 className="font-serif font-extrabold text-xl text-french-dark">
-            Best-Selling Food Items 🏆
+          <h3 className="font-serif font-extrabold text-xl text-french-dark flex items-center gap-2">
+            <Award className="w-5 h-5 text-french-gold" />
+            <span>Best-Selling Food Items</span>
           </h3>
           <p className="text-xs text-french-muted">Top dishes by volume ordered</p>
         </div>

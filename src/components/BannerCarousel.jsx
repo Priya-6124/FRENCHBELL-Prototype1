@@ -123,8 +123,8 @@ export default function BannerCarousel({ banners = [], onExploreClick }) {
                 <h2 className="font-serif font-extrabold text-lg sm:text-2xl md:text-3xl text-french-cream leading-tight tracking-tight drop-shadow-md">
                   {currentBanner.title}
                 </h2>
-                <div className="w-32 sm:w-44 mt-0.5">
-                  <CurvedUnderline className="text-french-gold h-2 sm:h-3" />
+                <div className="w-36 sm:w-48 mt-1">
+                  <CurvedUnderline className="text-french-caramel-light h-3.5 sm:h-4.5" />
                 </div>
               </div>
 

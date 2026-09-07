@@ -1,61 +1,63 @@
-# 🔔 French Bell Cafe — Gourmet Quick Bites & Cafe Management System
+# French Bell Cafe — Gourmet Quick Bites & Cafe Management System
 
-> **"Good food. Great mood. Ding!" 🔔**  
-> An end-to-end, ultra-modern cafe web application and operational management platform for **French Bell Cafe** (K. Narayanpura, Bengaluru – 560077).
+> **"Good food. Great mood."**  
+> An end-to-end cafe web application and operational management platform for **French Bell Cafe** (K. Narayanpura, Bengaluru – 560077).
 
 ---
 
-## 🌟 Highlights & Key Features
+## Highlights & Key Features
 
-### 1. 🎨 Popping Food Emojis Splash Screen
-- High-energy, minimal-text introductory animation with floating food emojis (🍔, 🍟, 🥟, 🍗, 🥪, 🌯, 🧀, ☕, 🧋, ✨).
-- Glowing French Bell brand logo with golden bell ripple animation.
-- Crisp golden bell sound effect on launch (`playSplashSound`).
+### 1. Spiral Food Illustration Splash Screen
+- Independent introductory animation matching the official FrenchBell warm cream design language.
+- Clean vector food illustrations (Burger, Fries, Momos, Strips, Sandwich, Kathi Roll, Loaded Fries, and Platter).
+- Authentic French Bell logo in the center with smooth spiral vortex animation and micro-bounce eating reaction.
+- Golden cafe bell sound effect on launch (`playSplashSound`).
+- Zero navigation bar, header, or footer during splash; seamless transition to the main website.
 
-### 2. 📱 Mobile-Only OTP Customer Authentication
+### 2. Mobile-Only OTP Customer Authentication
 - Seamless 10-digit Indian mobile number sign-in with 4-digit SMS OTP verification.
 - **Order Protection Gate**: Customers cannot place orders without verifying their mobile number.
 - Simulated SMS auto-fill notification banner for instant prototype testing.
 - Manager direct passcode login (`admin123`) with instant admin token generation.
 
-### 3. 🍽️ Table QR Code Dine-In Ordering Mode
+### 3. Table QR Code Dine-In Ordering Mode
 - Seated customers can scan physical table standees (e.g. `/?table=04&mode=dine-in`) to unlock a locked-in table ordering experience.
 - Automatic table assignment (`Table #04`), eliminating wait times for servers.
 - Orders route directly to the Kitchen Display System (KDS) with table badges.
 
-### 4. 🎛️ 3-Way Order Fulfillment & Dietary Filters
+### 4. 3-Way Order Fulfillment & Dietary Filters
 - **Order Fulfillment Switcher**:
-  - 🍽️ **Dine-In**: Select Table number & party size.
-  - 🛍️ **Takeaway**: Express counter pickup with preparation ETA.
-  - 🛵 **Delivery**: Free delivery within 2 KM radius (₹15/km beyond 2km).
-- **Dietary Filter Switcher**: One-tap toggle between **All Items**, **🟢 Pure Veg**, and **🔴 Non-Veg**.
+  - **Dine-In**: Select Table number & party size.
+  - **Takeaway**: Express counter pickup with preparation ETA.
+  - **Delivery**: Free delivery within 2 KM radius (Rs.15/km beyond 2km).
+- **Dietary Filter Switcher**: One-tap toggle between **All Items**, **Pure Veg**, and **Non-Veg**.
 
-### 5. 🍔 Rich Food Customization Modal
+### 5. Rich Food Customization Modal
 - Clicking any menu dish opens the culinary customizer:
-  - **Portion Sizes**: Regular, Large (+₹40), Jumbo (+₹80).
+  - **Portion Sizes**: Regular, Large (+Rs.40), Jumbo (+Rs.80).
   - **Filling Options**: Classic Veg / Crispy Chicken.
   - **Spice Levels**: Mild, Medium, Fiery Spiced.
-  - **Add-ons & Dips**: Molten Cheese (+₹30), Peri Peri Dip (+₹20), Jalapeños (+₹15), Garlic Mayo (+₹20), Extra Crispy Strip (+₹45).
+  - **Add-ons & Dips**: Molten Cheese (+Rs.30), Peri Peri Dip (+Rs.20), Jalapenos (+Rs.15), Garlic Mayo (+Rs.20), Extra Crispy Strip (+Rs.45).
   - **Chef Cooking Notes**: Special instructions box.
 
-### 6. 💳 Interactive Payment Sandbox & Success Celebration
-- Interactive dummy payment module supporting:
-  - 📱 **UPI**: Google Pay, PhonePe, Paytm, and Cafe QR scan simulator.
-  - 💳 **Credit & Debit Cards**: Interactive test card simulator.
-  - 🏦 **NetBanking**: All major banks.
-  - 💵 **Pay at Counter / Cash on Delivery**.
+### 6. Interactive Payment Sandbox & Success Celebration
+- Interactive payment module supporting:
+  - **UPI**: Google Pay, PhonePe, Paytm, and Cafe QR scan simulator.
+  - **Credit & Debit Cards**: Interactive test card simulator.
+  - **NetBanking**: All major banks.
+  - **Pay at Counter / Cash on Delivery**.
 - Smooth processing animation followed by celebratory confetti explosion and **Payment Success Chime** (`playPaymentSuccessSound`).
 
-### 7. 🔢 Daily Order Sequence (`FB001` - `FB999`) Resetting at 2:00 AM
+### 7. Daily Order Sequence (FB001 - FB999) Resetting at 2:00 AM
 - Order numbers follow a clean `FB001`, `FB002`, `FB003` sequence.
 - Built-in business day algorithm with **2:00 AM cutoff**:
   - Orders placed between 00:00 and 01:59 belong to the previous day's shift.
   - Every day after 2:00 AM, the sequence resets fresh to `FB001`.
 
-### 8. 📊 Comprehensive Cafe Management & Admin Operations
-- **Live Kanban Kitchen Display System (KDS)**: Real-time 4-stage pipeline (*Received ➔ In Kitchen ➔ Ready to Serve ➔ Completed*).
+### 8. Comprehensive Cafe Management & Admin Operations
+- **Live Kanban Kitchen Display System (KDS)**: Real-time 4-stage pipeline (*Received -> In Kitchen -> Ready to Serve -> Completed*).
 - **Table QR Standee Generator**: View all tables (01 to 12) with instant print-ready PNG download for acrylic standees.
-- **Menu & Inventory Manager**: Add/edit dishes with **device photo upload** or AI food presets (zero external links), live price updates, and "In Stock / Sold Out" switches.
+- **Menu & Inventory Manager**: Add/edit dishes with device photo upload or food presets, live price updates, and "In Stock / Sold Out" switches.
 - **Promotional Offers & Coupons**: Create percentage/flat discount codes with minimum order limits and instant customer broadcast.
 - **Advertisement & Banner Manager**: Upload and schedule homepage hero banners and special deal announcements.
 - **Analytics Dashboard & Data Export**:
@@ -66,16 +68,16 @@
 
 ---
 
-## 🔊 Sound Policy
+## Sound Policy
 In strict compliance with project specifications:
-- ✅ **Splash Screen Sound**: `playSplashSound()` (Golden bell chime)
-- ✅ **Payment Success Sound**: `playPaymentSuccessSound()` (Melodious payment confirmation)
-- ❌ All other sound triggers (add-to-cart, modal clicks) have been completely removed.
+- **Splash Screen Sound**: `playSplashSound()` (Golden bell chime)
+- **Payment Success Sound**: `playPaymentSuccessSound()` (Melodious payment confirmation)
+- All other sound triggers have been removed.
 
 ---
 
-## 🖼️ Local AI Image Assets
-All external Unsplash links have been replaced with local high-resolution AI food photography:
+## Local Image Assets
+All images use local assets:
 - `public/assets/food/burger.jpg` — Gourmet Double Patty Burger
 - `public/assets/food/fries.jpg` — Crispy Peri Peri French Fries
 - `public/assets/food/momos.jpg` — Steamed & Fried Gourmet Momos
@@ -88,7 +90,7 @@ All external Unsplash links have been replaced with local high-resolution AI foo
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### 1. Prerequisites
 - Node.js (v18 or higher recommended)
@@ -106,9 +108,9 @@ npm install
 npm run dev
 ```
 
-- **Customer Website**: [http://localhost:3000](http://localhost:3000)
-- **Table QR Dine-In Test**: [http://localhost:3000/?table=04&mode=dine-in](http://localhost:3000/?table=04&mode=dine-in)
-- **Backend API**: [http://localhost:5000](http://localhost:5000)
+- **Customer Website**: http://localhost:3000
+- **Table QR Dine-In Test**: http://localhost:3000/?table=04&mode=dine-in
+- **Backend API**: http://localhost:5000
 
 ### 4. Admin Access
 - Click **"Admin Portal"** in the top navigation bar or footer.
@@ -116,10 +118,12 @@ npm run dev
 
 ---
 
-## 📂 Project Architecture
+## Project Architecture
 
 ```
 FrenchBell_Prototype/
+├── docs/
+│   └── CUSTOMER_SIDE_CODE_DOCUMENTATION.md # Customer architecture documentation
 ├── public/
 │   └── assets/
 │       ├── logo.jfif              # French Bell Cafe Official Logo
@@ -140,20 +144,21 @@ FrenchBell_Prototype/
 ├── src/
 │   ├── assets/                    # Local brand assets
 │   ├── components/
-│   │   ├── SplashScreen.jsx       # Popping food emojis splash
+│   │   ├── SplashScreen.jsx       # Spiral vector food animation splash
+│   │   ├── FoodIllustrations.jsx  # Polished SVG vector food icons
+│   │   ├── BrandIcons.jsx         # Custom SVG Brand Icons (WhatsApp, Instagram, etc.)
 │   │   ├── Navbar.jsx             # Top bar with Cart, Profile & Admin links
 │   │   ├── Hero.jsx               # Hero section & table scan banner
 │   │   ├── OrderModeToggle.jsx    # Dine-In / Takeaway / Delivery toggle
 │   │   ├── FoodCard.jsx           # Interactive food cards with customizer trigger
 │   │   ├── FoodDetailsModal.jsx   # Portion, spice, variant & add-on customizer
 │   │   ├── CartDrawer.jsx         # Live sliding cart with customized breakdown
-│   │   ├── CheckoutModal.jsx      # Mobile OTP gate & dummy payment sandbox
+│   │   ├── CheckoutModal.jsx      # Mobile OTP gate & payment sandbox
 │   │   ├── ConfirmationModal.jsx  # Order success modal with FB001 reference
 │   │   ├── OrderTracker.jsx       # Real-time order preparation tracker
 │   │   ├── EReceiptModal.jsx      # Printable receipt & WhatsApp dispatcher
 │   │   ├── AuthModal.jsx          # Customer 4-digit mobile OTP verification
 │   │   ├── ProfileDrawer.jsx      # Order history & user profile
-│   │   ├── BrandedFoodImage.jsx   # Reliable local image component
 │   │   └── admin/
 │   │       ├── AdminDashboard.jsx     # Master cafe operations center
 │   │       ├── AdminSidebar.jsx       # Operations navigation
@@ -180,7 +185,7 @@ FrenchBell_Prototype/
 
 ---
 
-## 🛠️ API Reference Summary
+## API Reference Summary
 
 | Method | Endpoint | Description |
 |---|---|---|
@@ -200,7 +205,7 @@ FrenchBell_Prototype/
 
 ---
 
-## 🔔 French Bell Cafe Details
+## French Bell Cafe Details
 - **Location**: K. Narayanpura, Bengaluru – 560077, Karnataka
 - **Hours**: 11:00 AM – 11:30 PM (Daily)
 - **Hotline**: +91 98765 43210

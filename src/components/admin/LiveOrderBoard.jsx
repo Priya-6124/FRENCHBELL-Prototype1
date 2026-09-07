@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { ShoppingBag, Clock, CheckCircle2, ChevronRight, Filter, Search, Bell, Utensils, Bike, QrCode } from 'lucide-react';
+import { ShoppingBag, Clock, CheckCircle2, ChevronRight, Filter, Search, Bell, Utensils, Bike, QrCode, MapPin, RefreshCw, ArrowRight, Check } from 'lucide-react';
 
 export default function LiveOrderBoard() {
   const { token } = useAuth();
@@ -136,27 +136,31 @@ export default function LiveOrderBoard() {
 
         {/* Filter Controls */}
         <div className="flex flex-wrap items-center gap-2">
-          {/* Order Type Toggle */}
+          {/* Filter by Type */}
           <div className="flex items-center bg-french-brown/80 rounded-2xl p-1 border border-french-gold/30 text-xs">
             {['all', 'dine-in', 'takeaway', 'delivery'].map(type => (
               <button
                 key={type}
                 onClick={() => setTypeFilter(type)}
-                className={`px-3 py-1.5 rounded-xl font-bold uppercase tracking-wider transition-all ${
+                className={`px-3 py-1.5 rounded-xl font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 ${
                   typeFilter === type ? 'bg-french-gold text-french-dark shadow' : 'text-french-cream/80 hover:text-french-gold'
                 }`}
               >
-                {type === 'all' ? 'All Types' : (type === 'dine-in' ? '🍽️ Dine-In' : (type === 'takeaway' ? '🛍️ Takeaway' : '🛵 Delivery'))}
+                {type === 'all' && <span>All Types</span>}
+                {type === 'dine-in' && <><Utensils className="w-3.5 h-3.5" /><span>Dine-In</span></>}
+                {type === 'takeaway' && <><ShoppingBag className="w-3.5 h-3.5" /><span>Takeaway</span></>}
+                {type === 'delivery' && <><Bike className="w-3.5 h-3.5" /><span>Delivery</span></>}
               </button>
             ))}
           </div>
 
           <button
             onClick={fetchOrders}
-            className="p-2.5 rounded-2xl bg-french-gold/20 text-french-gold border border-french-gold/30 hover:bg-french-gold hover:text-french-dark transition-all text-xs font-bold"
+            className="p-2.5 rounded-2xl bg-french-gold/20 text-french-gold border border-french-gold/30 hover:bg-french-gold hover:text-french-dark transition-all text-xs font-bold flex items-center gap-1.5"
             title="Refresh Orders"
           >
-            ↻ Refresh
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Refresh</span>
           </button>
         </div>
       </div>
@@ -192,12 +196,27 @@ export default function LiveOrderBoard() {
                         <span className="font-mono font-black text-base text-french-gold bg-french-dark px-2.5 py-0.5 rounded-lg">
                           #{order.order_number}
                         </span>
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider ${
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider flex items-center gap-1 ${
                           order.order_type === 'dine-in'
                             ? 'bg-amber-100 text-amber-900 border border-amber-300'
                             : (order.order_type === 'takeaway' ? 'bg-blue-100 text-blue-900' : 'bg-emerald-100 text-emerald-900')
                         }`}>
-                          {order.order_type === 'dine-in' ? `🍽️ Table #${order.table_number || '04'}` : (order.order_type === 'takeaway' ? '🛍️ Takeaway' : '🛵 Delivery')}
+                          {order.order_type === 'dine-in' ? (
+                            <>
+                              <Utensils className="w-3 h-3" />
+                              <span>Table #{order.table_number || '04'}</span>
+                            </>
+                          ) : order.order_type === 'takeaway' ? (
+                            <>
+                              <ShoppingBag className="w-3 h-3" />
+                              <span>Takeaway</span>
+                            </>
+                          ) : (
+                            <>
+                              <Bike className="w-3 h-3" />
+                              <span>Delivery</span>
+                            </>
+                          )}
                         </span>
                       </div>
 
@@ -206,7 +225,10 @@ export default function LiveOrderBoard() {
                         <div className="font-bold text-xs text-french-dark">{order.customer_name}</div>
                         <div className="text-[11px] text-french-muted font-mono">{order.phone}</div>
                         {order.delivery_address && (
-                          <div className="text-[10px] text-french-muted truncate mt-0.5">📍 {order.delivery_address}</div>
+                          <div className="text-[10px] text-french-muted truncate mt-0.5 flex items-center gap-1">
+                            <MapPin className="w-3 h-3 shrink-0 text-french-gold" />
+                            <span>{order.delivery_address}</span>
+                          </div>
                         )}
                       </div>
 
@@ -238,27 +260,30 @@ export default function LiveOrderBoard() {
                           {col.id === 'received' && (
                             <button
                               onClick={() => handleUpdateStatus(order.id, 'preparing')}
-                              className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] uppercase tracking-wider transition-colors"
+                              className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] uppercase tracking-wider transition-colors flex items-center gap-1"
                             >
-                              Start Cooking ➔
+                              <span>Start Cooking</span>
+                              <ArrowRight className="w-3 h-3" />
                             </button>
                           )}
 
                           {col.id === 'preparing' && (
                             <button
                               onClick={() => handleUpdateStatus(order.id, 'ready')}
-                              className="px-2.5 py-1 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-bold text-[10px] uppercase tracking-wider transition-colors"
+                              className="px-2.5 py-1 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-bold text-[10px] uppercase tracking-wider transition-colors flex items-center gap-1"
                             >
-                              Mark Ready ➔
+                              <span>Mark Ready</span>
+                              <ArrowRight className="w-3 h-3" />
                             </button>
                           )}
 
                           {col.id === 'ready' && (
                             <button
                               onClick={() => handleUpdateStatus(order.id, 'completed')}
-                              className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] uppercase tracking-wider transition-colors"
+                              className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] uppercase tracking-wider transition-colors flex items-center gap-1"
                             >
-                              Complete ✓
+                              <span>Complete</span>
+                              <Check className="w-3 h-3" />
                             </button>
                           )}
                         </div>

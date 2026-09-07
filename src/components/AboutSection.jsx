@@ -51,7 +51,7 @@ export default function AboutSection() {
                 About <span className="text-french-warm">FrenchBell Cafe</span>
               </h2>
               <div className="w-56 sm:w-72 mt-1">
-                <CurvedUnderline className="text-french-gold h-3 sm:h-4" />
+                <CurvedUnderline className="text-french-caramel h-4 sm:h-5" />
               </div>
             </div>
 

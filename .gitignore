@@ -29,3 +29,6 @@ Thumbs.db
 
 # Vercel
 .vercel
+
+# Vite temporary files
+vite.config.js.timestamp-*

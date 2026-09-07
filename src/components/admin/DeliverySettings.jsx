@@ -22,7 +22,7 @@ export default function DeliverySettings() {
     };
 
     setSettings(prev => ({ ...prev, ...updated }));
-    addNotification('Delivery Settings Saved 🛵', 'Radius & charges updated!', 'success');
+    addNotification('Delivery Settings Saved', 'Radius & charges updated!', 'success');
 
     try {
       await fetch('/api/settings', {

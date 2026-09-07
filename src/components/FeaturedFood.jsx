@@ -33,8 +33,8 @@ export default function FeaturedFood({ onExploreMenu }) {
             Popular Customer Favorites
           </h2>
 
-          <div className="w-36 mx-auto">
-            <CurvedUnderline className="text-french-gold h-3" />
+          <div className="w-44 sm:w-56 mx-auto">
+            <CurvedUnderline className="text-french-caramel h-4 sm:h-5" />
           </div>
 
           <p className="text-french-muted text-sm sm:text-base font-normal">

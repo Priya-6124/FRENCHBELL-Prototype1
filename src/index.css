@@ -73,3 +73,13 @@
 .animate-soft-pulse {
   animation: softPulse 2.5s infinite ease-in-out;
 }
+
+/* Decorative Thick Smooth Caramel Wavy Underline Utility */
+.caramel-wavy-underline {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 7' preserveAspectRatio='none'%3E%3Cpath d='M 0 3.5 C 3 0.8, 6 0.8, 9 3.5 C 12 6.2, 15 6.2, 18 3.5 C 21 0.8, 24 0.8, 27 3.5' fill='none' stroke='%238D3C0C' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: repeat-x;
+  background-position: bottom left;
+  background-size: 24px 7px;
+  padding-bottom: 7px;
+}
+

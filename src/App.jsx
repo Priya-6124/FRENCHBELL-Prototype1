@@ -71,13 +71,13 @@ function MainSiteContent() {
     );
   }
 
+  // Splash Screen Intro: Completely independent screen with NO navigation bar, header, or footer
+  if (showSplash) {
+    return <SplashScreen onComplete={() => setShowSplash(false)} />;
+  }
+
   return (
     <div className="min-h-screen bg-french-cream font-sans text-french-dark relative">
-
-      {/* Animated Splash Screen Intro */}
-      {showSplash && (
-        <SplashScreen onComplete={() => setShowSplash(false)} />
-      )}
 
       {/* Sticky Responsive Navigation Bar */}
       <Navbar onNavigate={handleNavigate} currentView={currentView} />

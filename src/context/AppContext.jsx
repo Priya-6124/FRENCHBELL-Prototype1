@@ -77,7 +77,8 @@ export function AppProvider({ children }) {
     instagram_url: 'https://instagram.com/frenchbellcafe',
     whatsapp_number: '+919876543210',
     facebook_url: 'https://facebook.com/frenchbellcafe',
-    map_embed_url: 'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3886.5862211993245!2d77.6434587!3d13.0619938!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3bae196f7c9e0b1f%3A0x4a01c79e72809f6e!2sK%20Narayanpura%20Main%20Rd%2C%20Bengaluru%2C%20Karnataka%20560077!5e0!3m2!1sen!2sin!4v1700000000000!5m2!1sen!2sin'
+    map_url: 'https://maps.app.goo.gl/w4z22NYUUiSxUxiJ6',
+    map_embed_url: 'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3886.6346914561876!2d77.6416629!3d13.0600021!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3bae1700505cef43%3A0xc792bc75b8cb8b90!2sFrench%20Bell%2C%20Kristu%20Jayanti%20College!5e0!3m2!1sen!2sin!4v1710000000000!5m2!1sen!2sin'
   });
 
   // Coupons State
