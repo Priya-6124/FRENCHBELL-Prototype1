@@ -36,7 +36,19 @@ export default function OffersSection({ onExploreClick }) {
     }
   ];
 
-  const displayOffers = defaultOffers;
+  const displayOffers = (offers && offers.length > 0)
+    ? offers.slice(0, 3).map((o, idx) => ({
+        id: o.id || idx,
+        title: o.title,
+        description: o.description || defaultOffers[idx % defaultOffers.length].description,
+        image_url: o.image_url || defaultOffers[idx % defaultOffers.length].image_url,
+        discount_label: o.discount_type === 'percentage'
+          ? `${o.discount_value}% OFF`
+          : (o.discount_value ? `₹${o.discount_value} OFF` : defaultOffers[idx % defaultOffers.length].discount_label),
+        validity: o.expiry_date || defaultOffers[idx % defaultOffers.length].validity,
+        applicable_order_type: (o.applicable_order_type || defaultOffers[idx % defaultOffers.length].applicable_order_type).toUpperCase()
+      }))
+    : defaultOffers;
 
   return (
     <section id="offers" className="py-16 sm:py-20 bg-gradient-to-b from-french-dark to-[#1F1008] text-french-cream relative overflow-hidden">

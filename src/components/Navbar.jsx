@@ -88,22 +88,24 @@ export default function Navbar({ onNavigate, currentView }) {
               </span>
             </button>
 
-            {/* Cart Icon Button with Count Badge */}
-            <button
-              onClick={() => setCartOpen(true)}
-              className={`relative p-2.5 rounded-full bg-french-brown/80 border border-french-gold/30 text-french-cream hover:text-french-gold hover:border-french-gold transition-all duration-300 shadow-md ${
-                cartAnimate ? 'scale-125 border-french-gold bg-french-gold/20' : ''
-              }`}
-              title="Shopping Cart"
-              aria-label="View Shopping Cart"
-            >
-              <ShoppingCart className="w-5 h-5 text-french-cream group-hover:text-french-gold" />
-              {totalItemCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 bg-french-gold text-french-dark text-[11px] font-black w-5 h-5 rounded-full flex items-center justify-center shadow-lg border-2 border-french-dark animate-pulse">
-                  {totalItemCount}
-                </span>
-              )}
-            </button>
+            {/* Cart Icon Button with Count Badge (Hidden for Admin: "for admin cart is not needed") */}
+            {!isAdmin && user?.role !== 'admin' && (
+              <button
+                onClick={() => setCartOpen(true)}
+                className={`relative p-2.5 rounded-full bg-french-brown/80 border border-french-gold/30 text-french-cream hover:text-french-gold hover:border-french-gold transition-all duration-300 shadow-md ${
+                  cartAnimate ? 'scale-125 border-french-gold bg-french-gold/20' : ''
+                }`}
+                title="Shopping Cart"
+                aria-label="View Shopping Cart"
+              >
+                <ShoppingCart className="w-5 h-5 text-french-cream group-hover:text-french-gold" />
+                {totalItemCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 bg-french-gold text-french-dark text-[11px] font-black w-5 h-5 rounded-full flex items-center justify-center shadow-lg border-2 border-french-dark animate-pulse">
+                    {totalItemCount}
+                  </span>
+                )}
+              </button>
+            )}
 
           </div>
 

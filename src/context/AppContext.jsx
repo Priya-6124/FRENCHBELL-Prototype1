@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { INITIAL_CATEGORIES, INITIAL_MENU_ITEMS } from '../data/menuData';
+import { INITIAL_INVENTORY_ITEMS } from '../data/inventoryData';
 
 const AppContext = createContext();
 
@@ -45,19 +46,61 @@ export function AppProvider({ children }) {
   const [selectedFood, setSelectedFood] = useState(null);
   const [activeOrder, setActiveOrder] = useState(null);
 
-  // Menu & Live Settings
-  const [menuItems, setMenuItems] = useState(INITIAL_MENU_ITEMS);
+  // Menu & Live Settings (Persisted in localStorage so Admin changes reflect immediately across customer views)
+  const [menuItems, setMenuItems] = useState(() => {
+    try {
+      const saved = localStorage.getItem('fb_menu_items');
+      return saved ? JSON.parse(saved) : INITIAL_MENU_ITEMS;
+    } catch (e) {
+      return INITIAL_MENU_ITEMS;
+    }
+  });
+
   const [categories, setCategories] = useState(INITIAL_CATEGORIES);
-  const [offers, setOffers] = useState([
-    { id: 1, coupon_code: 'WELCOME50', title: 'Welcome Feast', description: '50% off up to ₹100 on your first delicious order', discount_type: 'percentage', discount_value: 50, minimum_order: 299, max_discount: 100, expiry_date: '30 Sep 2026', applicable_order_type: 'all', active: 1 },
-    { id: 2, coupon_code: 'BELL50', title: 'Flat ₹50 Off Special', description: 'Flat ₹50 off on minimum order of ₹250', discount_type: 'fixed', discount_value: 50, minimum_order: 250, expiry_date: '31 Oct 2026', applicable_order_type: 'all', active: 1 },
-    { id: 3, coupon_code: 'DING10', title: '10% Off Cafe Cravings', description: 'Get 10% off on all orders above ₹199', discount_type: 'percentage', discount_value: 10, minimum_order: 199, max_discount: 60, expiry_date: '15 Oct 2026', applicable_order_type: 'all', active: 1 }
-  ]);
-  const [advertisements, setAdvertisements] = useState([
-    { id: 1, type: 'Weekend Offer', title: 'Monster Crispy Burgers & Sizzling Momos', description: 'Handcrafted fresh with secret French spices and gooey molten cheese!', image_url: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=1200&q=80', cta: 'Explore Menu', active: 1 },
-    { id: 2, type: 'Combo Offer', title: 'Grand Cafe Platters for Sharing', description: 'Loaded sampler plates with fries, strips, momos and dips starting at ₹179!', image_url: 'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&w=1200&q=80', cta: 'View Platters', active: 1 },
-    { id: 3, type: 'Special Discount', title: 'Free 20-Min Doorstep Delivery', description: 'Enjoy piping hot gourmet snacks delivered right to your door with zero delivery fees!', image_url: 'https://images.unsplash.com/photo-1586190848861-99aa4a171e90?auto=format&fit=crop&w=1200&q=80', cta: 'Order Now', active: 1 }
-  ]);
+
+  const [offers, setOffers] = useState(() => {
+    try {
+      const saved = localStorage.getItem('fb_offers');
+      return saved ? JSON.parse(saved) : [
+        { id: 1, coupon_code: 'WELCOME50', title: 'Welcome Feast', description: '50% off up to ₹100 on your first delicious order', discount_type: 'percentage', discount_value: 50, minimum_order: 299, max_discount: 100, expiry_date: '30 Sep 2026', applicable_order_type: 'all', active: 1 },
+        { id: 2, coupon_code: 'BELL50', title: 'Flat ₹50 Off Special', description: 'Flat ₹50 off on minimum order of ₹250', discount_type: 'fixed', discount_value: 50, minimum_order: 250, expiry_date: '31 Oct 2026', applicable_order_type: 'all', active: 1 },
+        { id: 3, coupon_code: 'DING10', title: '10% Off Cafe Cravings', description: 'Get 10% off on all orders above ₹199', discount_type: 'percentage', discount_value: 10, minimum_order: 199, max_discount: 60, expiry_date: '15 Oct 2026', applicable_order_type: 'all', active: 1 }
+      ];
+    } catch (e) {
+      return [
+        { id: 1, coupon_code: 'WELCOME50', title: 'Welcome Feast', description: '50% off up to ₹100 on your first delicious order', discount_type: 'percentage', discount_value: 50, minimum_order: 299, max_discount: 100, expiry_date: '30 Sep 2026', applicable_order_type: 'all', active: 1 },
+        { id: 2, coupon_code: 'BELL50', title: 'Flat ₹50 Off Special', description: 'Flat ₹50 off on minimum order of ₹250', discount_type: 'fixed', discount_value: 50, minimum_order: 250, expiry_date: '31 Oct 2026', applicable_order_type: 'all', active: 1 },
+        { id: 3, coupon_code: 'DING10', title: '10% Off Cafe Cravings', description: 'Get 10% off on all orders above ₹199', discount_type: 'percentage', discount_value: 10, minimum_order: 199, max_discount: 60, expiry_date: '15 Oct 2026', applicable_order_type: 'all', active: 1 }
+      ];
+    }
+  });
+
+  // Raw Inventory & Procurement Management
+  const [inventory, setInventory] = useState(() => {
+    try {
+      const saved = localStorage.getItem('fb_inventory');
+      return saved ? JSON.parse(saved) : INITIAL_INVENTORY_ITEMS;
+    } catch (e) {
+      return INITIAL_INVENTORY_ITEMS;
+    }
+  });
+
+  const [advertisements, setAdvertisements] = useState(() => {
+    try {
+      const saved = localStorage.getItem('fb_advertisements');
+      return saved ? JSON.parse(saved) : [
+        { id: 1, type: 'Weekend Offer', title: 'Monster Crispy Burgers & Sizzling Momos', description: 'Handcrafted fresh with secret French spices and gooey molten cheese!', image_url: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=1200&q=80', cta: 'Explore Menu', active: 1 },
+        { id: 2, type: 'Combo Offer', title: 'Grand Cafe Platters for Sharing', description: 'Loaded sampler plates with fries, strips, momos and dips starting at ₹179!', image_url: 'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&w=1200&q=80', cta: 'View Platters', active: 1 },
+        { id: 3, type: 'Special Discount', title: 'Free 20-Min Doorstep Delivery', description: 'Enjoy piping hot gourmet snacks delivered right to your door with zero delivery fees!', image_url: 'https://images.unsplash.com/photo-1586190848861-99aa4a171e90?auto=format&fit=crop&w=1200&q=80', cta: 'Order Now', active: 1 }
+      ];
+    } catch (e) {
+      return [
+        { id: 1, type: 'Weekend Offer', title: 'Monster Crispy Burgers & Sizzling Momos', description: 'Handcrafted fresh with secret French spices and gooey molten cheese!', image_url: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=1200&q=80', cta: 'Explore Menu', active: 1 },
+        { id: 2, type: 'Combo Offer', title: 'Grand Cafe Platters for Sharing', description: 'Loaded sampler plates with fries, strips, momos and dips starting at ₹179!', image_url: 'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&w=1200&q=80', cta: 'View Platters', active: 1 },
+        { id: 3, type: 'Special Discount', title: 'Free 20-Min Doorstep Delivery', description: 'Enjoy piping hot gourmet snacks delivered right to your door with zero delivery fees!', image_url: 'https://images.unsplash.com/photo-1586190848861-99aa4a171e90?auto=format&fit=crop&w=1200&q=80', cta: 'Order Now', active: 1 }
+      ];
+    }
+  });
 
   const [settings, setSettings] = useState({
     cafe_name: 'FrenchBell Cafe',
@@ -97,6 +140,34 @@ export function AppProvider({ children }) {
   useEffect(() => {
     localStorage.setItem('fb_order_mode', orderMode);
   }, [orderMode]);
+
+  // Persist Menu Items (Guarantees Admin updates reflect on User side)
+  useEffect(() => {
+    try {
+      localStorage.setItem('fb_menu_items', JSON.stringify(menuItems));
+    } catch (e) {}
+  }, [menuItems]);
+
+  // Persist Offers & Coupons
+  useEffect(() => {
+    try {
+      localStorage.setItem('fb_offers', JSON.stringify(offers));
+    } catch (e) {}
+  }, [offers]);
+
+  // Persist Raw Inventory
+  useEffect(() => {
+    try {
+      localStorage.setItem('fb_inventory', JSON.stringify(inventory));
+    } catch (e) {}
+  }, [inventory]);
+
+  // Persist Advertisements
+  useEffect(() => {
+    try {
+      localStorage.setItem('fb_advertisements', JSON.stringify(advertisements));
+    } catch (e) {}
+  }, [advertisements]);
 
   // Check URL params on initial load for QR Table Dine-In Scan
   useEffect(() => {
@@ -293,6 +364,72 @@ export function AppProvider({ children }) {
   const deliveryCharge = orderMode === 'delivery' ? (cartSubtotal > 0 && cartSubtotal < 199 ? 25 : 0) : 0;
   const grandTotal = Math.max(0, cartSubtotal - discountAmount + taxAmount + deliveryCharge);
 
+  // Inventory Management Methods
+  const addInventoryItem = (item) => {
+    const newItem = {
+      ...item,
+      id: Date.now(),
+      last_restocked: new Date().toISOString().split('T')[0]
+    };
+    setInventory(prev => [newItem, ...prev]);
+    addNotification('Inventory Updated', `Added "${newItem.name}" to stock register`, 'success');
+    return newItem;
+  };
+
+  const updateInventoryItem = (id, updates) => {
+    setInventory(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item));
+    addNotification('Inventory Updated', 'Stock details saved successfully', 'info');
+  };
+
+  const deleteInventoryItem = (id) => {
+    setInventory(prev => prev.filter(item => item.id !== id));
+    addNotification('Item Removed', 'Inventory item deleted from register', 'info');
+  };
+
+  const restockInventoryItem = (id, additionalQty, notes = '') => {
+    setInventory(prev => prev.map(item => {
+      if (item.id === id) {
+        const newStock = Math.max(0, Number((Number(item.current_stock) + Number(additionalQty)).toFixed(1)));
+        return {
+          ...item,
+          current_stock: newStock,
+          last_restocked: new Date().toISOString().split('T')[0]
+        };
+      }
+      return item;
+    }));
+    addNotification('Restock Logged', `Restocked +${additionalQty} units successfully!`, 'success');
+  };
+
+  // Manual Coupon Application Handler (Allows users to enter custom promo code)
+  const applyCouponByCode = (enteredCode) => {
+    if (!enteredCode || !enteredCode.trim()) {
+      return { success: false, message: 'Please enter a coupon code.' };
+    }
+    const cleanCode = enteredCode.trim().toUpperCase();
+    const coupon = (offers || []).find(o => o.active !== 0 && o.coupon_code && o.coupon_code.toUpperCase() === cleanCode);
+
+    if (!coupon) {
+      return { success: false, message: `Coupon "${cleanCode}" is invalid or expired.` };
+    }
+
+    if (coupon.applicable_order_type && coupon.applicable_order_type !== 'all' && coupon.applicable_order_type !== orderMode) {
+      return { success: false, message: `Coupon "${cleanCode}" is only valid on ${coupon.applicable_order_type.toUpperCase()} orders.` };
+    }
+
+    if (cartSubtotal < (coupon.minimum_order || 0)) {
+      const diff = (coupon.minimum_order || 0) - cartSubtotal;
+      return { success: false, message: `Add ₹${diff} more to apply coupon "${cleanCode}".` };
+    }
+
+    setUserManuallySelectedCoupon(true);
+    setIsAutoCoupon(false);
+    setAppliedOffer(coupon);
+    const disc = computeDiscount(coupon, cartSubtotal);
+    addNotification('Coupon Applied', `Coupon "${cleanCode}" applied! You save ₹${disc}.`, 'success');
+    return { success: true, coupon, discount: disc, message: `Coupon "${cleanCode}" applied! You saved ₹${disc}.` };
+  };
+
   return (
     <AppContext.Provider value={{
       currentView, setCurrentView,
@@ -308,6 +445,7 @@ export function AppProvider({ children }) {
       addToCart, updateCartItemDetails, removeFromCart, updateCartQty, clearCart,
       cartSubtotal, discountAmount, taxAmount, deliveryCharge, grandTotal, totalItemCount,
       appliedOffer, setAppliedOffer, setUserManuallySelectedCoupon, isAutoCoupon,
+      applyCouponByCode,
       activeModal, setActiveModal,
       selectedFood, setSelectedFood,
       activeOrder, setActiveOrder,
@@ -315,6 +453,8 @@ export function AppProvider({ children }) {
       categories, setCategories,
       offers, setOffers,
       advertisements, setAdvertisements,
+      inventory, setInventory,
+      addInventoryItem, updateInventoryItem, deleteInventoryItem, restockInventoryItem,
       settings, setSettings,
       notifications, addNotification
     }}>
