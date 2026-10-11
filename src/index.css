@@ -1,0 +1,85 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    background-color: #FAF5ED;
+    color: #1F110A;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    overflow-x: hidden;
+  }
+
+  h1, h2, h3, .font-serif {
+    font-family: 'Playfair Display', Georgia, serif;
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #FAF5ED;
+}
+::-webkit-scrollbar-thumb {
+  background: #D4AF37;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #B38F29;
+}
+
+/* Glassmorphism & Paper Textures */
+.glass-panel {
+  background: rgba(255, 253, 249, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(212, 175, 55, 0.2);
+}
+
+.glass-dark {
+  background: rgba(31, 17, 10, 0.92);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(212, 175, 55, 0.25);
+}
+
+.paper-texture {
+  background-color: #FFFDF9;
+  background-image: radial-gradient(#D4AF37 0.75px, transparent 0.75px), radial-gradient(#D4AF37 0.75px, #FFFDF9 0.75px);
+  background-size: 30px 30px;
+  background-position: 0 0, 15px 15px;
+  background-opacity: 0.05;
+}
+
+/* Custom Gold Glow & Shadow */
+.gold-glow {
+  box-shadow: 0 0 20px rgba(212, 175, 55, 0.35);
+}
+
+.gold-border-glow {
+  border-color: #D4AF37;
+  box-shadow: 0 0 15px rgba(212, 175, 55, 0.4);
+}
+
+/* Subtle Pulse */
+@keyframes softPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.03); }
+}
+
+.animate-soft-pulse {
+  animation: softPulse 2.5s infinite ease-in-out;
+}
+
+/* Decorative Thick Smooth Caramel Wavy Underline Utility */
+.caramel-wavy-underline {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 7' preserveAspectRatio='none'%3E%3Cpath d='M 0 3.5 C 3 0.8, 6 0.8, 9 3.5 C 12 6.2, 15 6.2, 18 3.5 C 21 0.8, 24 0.8, 27 3.5' fill='none' stroke='%238D3C0C' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: repeat-x;
+  background-position: bottom left;
+  background-size: 24px 7px;
+  padding-bottom: 7px;
+}
+
