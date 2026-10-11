@@ -1,7 +1,4 @@
-<<<<<<< HEAD
 import './env.js';
-=======
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
 import net from 'net';
 import tls from 'tls';
 import crypto from 'crypto';
@@ -17,7 +14,6 @@ import crypto from 'crypto';
 
 class EmailService {
   constructor() {
-<<<<<<< HEAD
     this.reloadConfig();
   }
 
@@ -57,20 +53,6 @@ class EmailService {
       sendgridKeyConfigured: Boolean(this.sendgridKey && this.sendgridKey.length > 0),
       brevoKeyConfigured: Boolean(this.brevoKey && this.brevoKey.length > 0),
     };
-=======
-    this.provider = process.env.EMAIL_PROVIDER || 'smtp';
-    this.from = process.env.EMAIL_FROM || '"FrenchBell Cafe" <manager@frenchbellcafe.com>';
-    this.smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
-    this.smtpPort = Number(process.env.SMTP_PORT || 587);
-    this.smtpSecure = process.env.SMTP_SECURE === 'true' || this.smtpPort === 465;
-    this.smtpUser = process.env.SMTP_USER || '';
-    this.smtpPass = process.env.SMTP_PASSWORD || '';
-    
-    // API keys
-    this.resendKey = process.env.RESEND_API_KEY || '';
-    this.sendgridKey = process.env.SENDGRID_API_KEY || '';
-    this.brevoKey = process.env.BREVO_API_KEY || '';
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
   }
 
   /**
@@ -79,12 +61,9 @@ class EmailService {
   async sendMail({ to, subject, html, text }) {
     if (!to) throw new Error('Recipient email address is required.');
 
-<<<<<<< HEAD
     // Always ensure latest environment configuration is loaded
     this.reloadConfig();
 
-=======
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
     const cleanTo = String(to).trim().toLowerCase();
     console.log(`[EmailService] Initiating email delivery to ${cleanTo} via ${this.provider.toUpperCase()}...`);
 
@@ -108,22 +87,10 @@ class EmailService {
       return this._sendViaNativeSmtp({ to: cleanTo, subject, html, text });
     }
 
-<<<<<<< HEAD
     // Never simulate delivery if unconfigured
     throw new Error(
       'Email provider is not configured. Please set SMTP_USER and SMTP_PASSWORD (or RESEND_API_KEY, SENDGRID_API_KEY, BREVO_API_KEY) in .env to deliver administrative emails.'
     );
-=======
-    // If SMTP credentials not yet provided in .env, log clear notice & simulate delivery
-    console.warn(`[EmailService WARNING] SMTP credentials not set in .env. To enable live inbox delivery, set SMTP_USER & SMTP_PASSWORD in .env.`);
-    return {
-      success: true,
-      simulated: true,
-      messageId: `fb_sim_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`,
-      to: cleanTo,
-      subject
-    };
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
   }
 
   /**

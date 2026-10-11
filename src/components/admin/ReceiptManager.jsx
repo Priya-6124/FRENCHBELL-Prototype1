@@ -17,7 +17,6 @@ export default function ReceiptManager() {
   const [selectedReceipt, setSelectedReceipt] = useState(null);
   const [loading, setLoading] = useState(false);
 
-<<<<<<< HEAD
   // Load orders from API
   const fetchReceipts = () => {
     setLoading(true);
@@ -29,94 +28,6 @@ export default function ReceiptManager() {
       })
       .catch(() => {
         setOrders([]);
-=======
-  // Load orders from API and LocalStorage fallback
-  const fetchReceipts = () => {
-    setLoading(true);
-    fetch('/api/orders')
-      .then(res => res.ok ? res.json() : null)
-      .then(data => {
-        let combined = Array.isArray(data) ? [...data] : [];
-        try {
-          const localOrders = JSON.parse(localStorage.getItem('fb_orders') || '[]');
-          // Merge local orders that are not already present
-          localOrders.forEach(lo => {
-            if (!combined.some(o => o.order_number === lo.order_number)) {
-              combined.unshift(lo);
-            }
-          });
-        } catch (e) {}
-
-        if (combined.length === 0) {
-          // Provide realistic fallback orders if brand new session
-          combined = [
-            {
-              id: 1,
-              order_number: 'FB001',
-              customer_name: 'Priya Sundaram',
-              phone: '9876501234',
-              order_type: 'delivery',
-              delivery_address: 'Flat 402, Sunshine Apts, K. Narayanpura',
-              subtotal: 269,
-              discount: 50,
-              delivery_charge: 0,
-              total: 232,
-              payment_method: 'upi_gpay',
-              payment_status: 'paid',
-              order_status: 'completed',
-              created_at: new Date(Date.now() - 3600000).toISOString(),
-              items: [
-                { item_name: 'Double Zinger Burger', quantity: 1, unit_price: 199, total_price: 199, variant: 'Chicken' },
-                { item_name: 'Peri Peri Fries', quantity: 1, unit_price: 70, total_price: 70 }
-              ]
-            },
-            {
-              id: 2,
-              order_number: 'FB002',
-              customer_name: 'Amit Patel',
-              phone: '9811223344',
-              order_type: 'dine-in',
-              table_number: '04',
-              subtotal: 378,
-              discount: 0,
-              delivery_charge: 0,
-              total: 397,
-              payment_method: 'upi_phonepe',
-              payment_status: 'paid',
-              order_status: 'preparing',
-              created_at: new Date(Date.now() - 7200000).toISOString(),
-              items: [
-                { item_name: 'Cheesy Blaster Loaded', quantity: 1, unit_price: 179, total_price: 179 },
-                { item_name: 'Fusion Platter', quantity: 1, unit_price: 199, total_price: 199 }
-              ]
-            },
-            {
-              id: 3,
-              order_number: 'FB003',
-              customer_name: 'Sara Khan',
-              phone: '9988776655',
-              order_type: 'takeaway',
-              pickup_time: '20 mins',
-              subtotal: 218,
-              discount: 30,
-              delivery_charge: 0,
-              total: 197,
-              payment_method: 'card',
-              payment_status: 'paid',
-              order_status: 'ready',
-              created_at: new Date(Date.now() - 10800000).toISOString(),
-              items: [
-                { item_name: 'FB Chicken Roll', quantity: 2, unit_price: 109, total_price: 218 }
-              ]
-            }
-          ];
-        }
-
-        setOrders(combined);
-        setLoading(false);
-      })
-      .catch(() => {
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
         setLoading(false);
       });
   };
@@ -220,7 +131,6 @@ export default function ReceiptManager() {
 
   // WhatsApp Share receipt link to customer
   const handleShareWhatsApp = (order) => {
-<<<<<<< HEAD
     const rawPhone = String(order.phone || '').replace(/\D/g, '');
     const cleanPhone = rawPhone.length === 10 ? `91${rawPhone}` : rawPhone;
     if (!cleanPhone) {
@@ -233,14 +143,6 @@ export default function ReceiptManager() {
     );
     window.open(`https://wa.me/${cleanPhone}?text=${message}`, '_blank');
     addNotification('WhatsApp Chat Opened', `Opened WhatsApp chat for recipient +${cleanPhone}`, 'info');
-=======
-    const receiptLink = `${window.location.origin}/api/receipts/${order.order_number}/download`;
-    const message = encodeURIComponent(
-      `Hello ${order.customer_name}! 🍽️\nHere is your official tax receipt for Order #${order.order_number} at FrenchBell Cafe.\nTotal Amount: ₹${order.total}\nView / Download Receipt: ${receiptLink}\n\nThank you for choosing FrenchBell Cafe!`
-    );
-    window.open(`https://api.whatsapp.com/send?phone=91${order.phone}&text=${message}`, '_blank');
-    addNotification('WhatsApp Shared', `Receipt link shared to +91 ${order.phone}`, 'success');
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
   };
 
   // Export all receipts / orders to Excel

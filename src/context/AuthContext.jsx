@@ -31,17 +31,12 @@ export function AuthProvider({ children }) {
     }
   }, [user]);
 
-<<<<<<< HEAD
   // Send Mobile OTP (Customer Auth via Real SMS Provider)
-=======
-  // Send Mobile OTP (Customer Auth)
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
   const sendOtp = async (phone) => {
     setLoading(true);
     try {
       const cleanPhone = phone.replace(/\D/g, '').slice(-10);
       if (!cleanPhone || cleanPhone.length !== 10) {
-<<<<<<< HEAD
         throw new Error('Please enter a valid 10-digit mobile number.');
       }
 
@@ -57,35 +52,6 @@ export function AuthProvider({ children }) {
 
       setLoading(false);
       return data;
-=======
-        throw new Error('Please enter a valid mobile number.');
-      }
-
-      // Backend OTP endpoint
-      try {
-        const res = await fetch('/api/auth/send-otp', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ phone: cleanPhone })
-        });
-        const data = await res.json();
-        if (!res.ok) {
-          throw new Error(data.error || 'Failed to send OTP');
-        }
-        setLastGeneratedOtp(data.otp);
-        setLoading(false);
-        return data.otp;
-      } catch (err) {
-        if (err.message.includes('valid') || err.message.includes('Too many OTP') || err.message.includes('exceeded')) {
-          throw err;
-        }
-        // Fallback to client-side 4-digit OTP generation if server is offline
-        const fallbackOtp = String(Math.floor(1000 + Math.random() * 9000));
-        setLastGeneratedOtp(fallbackOtp);
-        setLoading(false);
-        return fallbackOtp;
-      }
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
     } catch (err) {
       setLoading(false);
       throw err;
@@ -99,7 +65,6 @@ export function AuthProvider({ children }) {
       const cleanPhone = phone.replace(/\D/g, '').slice(-10);
       const cleanOtp = String(enteredOtp).trim();
 
-<<<<<<< HEAD
       if (!cleanOtp || cleanOtp.length < 4) {
         throw new Error('Please enter a valid verification code.');
       }
@@ -123,60 +88,6 @@ export function AuthProvider({ children }) {
       setUser(data.user);
       setLoading(false);
       return data;
-=======
-      if (cleanOtp.length !== 4) {
-        throw new Error('Please enter a valid 4-digit OTP');
-      }
-
-      // Attempt backend verification
-      try {
-        const res = await fetch('/api/auth/verify-otp', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            phone: cleanPhone,
-            otp: cleanOtp,
-            name: name.trim(),
-            whatsapp_opt_in: !!whatsapp_opt_in
-          })
-        });
-        const data = await res.json();
-        if (!res.ok) {
-          throw new Error(data.error || 'The OTP is incorrect. Please try again.');
-        }
-        setToken(data.token);
-        setUser(data.user);
-        setLoading(false);
-        return data;
-      } catch (err) {
-        if (
-          err.message.includes('incorrect') ||
-          err.message.includes('expired') ||
-          err.message.includes('Maximum') ||
-          err.message.includes('valid')
-        ) {
-          throw err;
-        }
-        // Fallback local verification for testing if server is offline
-        if (lastGeneratedOtp && cleanOtp !== lastGeneratedOtp) {
-          throw new Error('The OTP is incorrect. Please try again.');
-        }
-
-        const fallbackUser = {
-          id: 'cust_' + cleanPhone.slice(-4),
-          name: name.trim() || `Foodie${Math.floor(1000 + Math.random() * 9000)}`,
-          phone: cleanPhone,
-          role: 'customer',
-          whatsapp_opt_in: !!whatsapp_opt_in
-        };
-        const fallbackToken = 'fb_local_' + Date.now();
-
-        setToken(fallbackToken);
-        setUser(fallbackUser);
-        setLoading(false);
-        return { success: true, user: fallbackUser, token: fallbackToken };
-      }
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
     } catch (err) {
       setLoading(false);
       throw err;
@@ -187,7 +98,6 @@ export function AuthProvider({ children }) {
   const updateProfile = async ({ name, whatsapp_opt_in }) => {
     setLoading(true);
     try {
-<<<<<<< HEAD
       if (!token) throw new Error('Authentication required.');
 
       const res = await fetch('/api/auth/profile', {
@@ -206,77 +116,21 @@ export function AuthProvider({ children }) {
       setUser(data.user);
       setLoading(false);
       return data.user;
-=======
-      if (token && !token.startsWith('fb_local_')) {
-        const res = await fetch('/api/auth/profile', {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({ name, whatsapp_opt_in })
-        });
-        const data = await res.json();
-        if (res.ok && data.user) {
-          setUser(data.user);
-          setLoading(false);
-          return data.user;
-        }
-      }
-      // Local fallback
-      const updated = {
-        ...user,
-        ...(name !== undefined && { name: name.trim() || user?.name || `Foodie${Math.floor(1000 + Math.random() * 9000)}` }),
-        ...(whatsapp_opt_in !== undefined && { whatsapp_opt_in: !!whatsapp_opt_in })
-      };
-      setUser(updated);
-      setLoading(false);
-      return updated;
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
     } catch (err) {
       setLoading(false);
       throw err;
     }
   };
 
-<<<<<<< HEAD
   // Admin Email & Password Authentication
-=======
-  // Admin Email & Password / Passcode Login
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
   const adminEmailLogin = async (email, password) => {
     setLoading(true);
     try {
       const cleanEmail = (email || '').trim().toLowerCase();
       const cleanPassword = (password || '').trim();
 
-<<<<<<< HEAD
       if (!cleanEmail || !cleanPassword) {
         throw new Error('Please enter both admin email and password.');
-=======
-      // Fast check: support hardcoded / legacy passcode (admin123, admin, FrenchBell@2026!)
-      if (
-        cleanPassword === 'admin123' ||
-        cleanPassword === 'admin' ||
-        cleanPassword === 'FrenchBell@2026!' ||
-        cleanEmail === 'admin' ||
-        cleanEmail === 'admin123' ||
-        (cleanEmail === 'manager@frenchbellcafe.com' && (cleanPassword === 'admin123' || cleanPassword === 'FrenchBell@2026!'))
-      ) {
-        const adminUser = {
-          id: 1,
-          name: 'French Bell Operations Manager',
-          phone: '9876543210',
-          email: 'manager@frenchbellcafe.com',
-          role: 'admin',
-          status: 'active'
-        };
-        const adminToken = 'fb_local_' + Date.now();
-        setToken(adminToken);
-        setUser(adminUser);
-        setLoading(false);
-        return adminUser;
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
       }
 
       const res = await fetch('/api/auth/admin-login', {
@@ -286,11 +140,7 @@ export function AuthProvider({ children }) {
       });
       const data = await res.json();
       if (!res.ok) {
-<<<<<<< HEAD
         throw new Error(data.error || 'Invalid administrator email address or password.');
-=======
-        throw new Error(data.error || 'Authentication failed');
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
       }
 
       setToken(data.token);
@@ -298,35 +148,6 @@ export function AuthProvider({ children }) {
       setLoading(false);
       return data.user;
     } catch (err) {
-<<<<<<< HEAD
-=======
-      // Local fallback: always allow admin login with passcode admin123, admin, or FrenchBell@2026!
-      const p = String(password || '').trim();
-      const e = String(email || '').trim().toLowerCase();
-      if (
-        p === 'admin123' ||
-        p === 'admin' ||
-        p === 'FrenchBell@2026!' ||
-        e === 'admin' ||
-        e === 'admin123' ||
-        e.includes('admin') ||
-        e.includes('manager')
-      ) {
-        const fallbackAdmin = {
-          id: 1,
-          name: 'French Bell Operations Manager',
-          phone: '9876543210',
-          email: 'manager@frenchbellcafe.com',
-          role: 'admin',
-          status: 'active'
-        };
-        const fallbackToken = 'fb_local_' + Date.now();
-        setToken(fallbackToken);
-        setUser(fallbackAdmin);
-        setLoading(false);
-        return fallbackAdmin;
-      }
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
       setLoading(false);
       throw err;
     }
@@ -336,7 +157,6 @@ export function AuthProvider({ children }) {
   const adminForgotPassword = async (email) => {
     setLoading(true);
     try {
-<<<<<<< HEAD
       const cleanEmail = (email || '').trim().toLowerCase();
       if (!cleanEmail) throw new Error('Email address is required.');
 
@@ -348,16 +168,6 @@ export function AuthProvider({ children }) {
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.error || 'Password reset request failed.');
-=======
-      const res = await fetch('/api/auth/admin-forgot-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim() })
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Password reset request failed');
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
       }
       setLoading(false);
       return data;
@@ -375,23 +185,14 @@ export function AuthProvider({ children }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-<<<<<<< HEAD
           token: resetToken.trim(),
-=======
-          email: email.trim(),
-          resetToken: resetToken.trim(),
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
           newPassword,
           confirmPassword
         })
       });
       const data = await res.json();
       if (!res.ok) {
-<<<<<<< HEAD
         throw new Error(data.error || 'Failed to update password.');
-=======
-        throw new Error(data.error || 'Failed to update password');
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
       }
       setLoading(false);
       return data;
@@ -401,18 +202,12 @@ export function AuthProvider({ children }) {
     }
   };
 
-<<<<<<< HEAD
   const adminLogin = async (emailOrPasscode, maybePassword) => {
     if (maybePassword) {
       return adminEmailLogin(emailOrPasscode, maybePassword);
     }
     // If single argument, treat as email or prompt
     return adminEmailLogin(emailOrPasscode, '');
-=======
-  // Legacy & Passcode adminLogin wrapper (supports adminLogin('admin123') as before)
-  const adminLogin = async (passcode) => {
-    return adminEmailLogin('manager@frenchbellcafe.com', passcode || 'admin123');
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
   };
 
   const logout = () => {

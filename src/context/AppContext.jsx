@@ -46,7 +46,6 @@ export function AppProvider({ children }) {
   const [selectedFood, setSelectedFood] = useState(null);
   const [activeOrder, setActiveOrder] = useState(null);
 
-<<<<<<< HEAD
   // Menu & Live Settings (Initial state populated from database on mount)
   const [menuItems, setMenuItems] = useState(INITIAL_MENU_ITEMS);
   const [categories, setCategories] = useState(INITIAL_CATEGORIES);
@@ -61,63 +60,6 @@ export function AppProvider({ children }) {
     { id: 2, type: 'Combo Offer', title: 'Grand Cafe Platters for Sharing', description: 'Loaded sampler plates with fries, strips, momos and dips starting at ₹179!', image_url: 'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&w=1200&q=80', cta: 'View Platters', active: 1 },
     { id: 3, type: 'Special Discount', title: 'Free 20-Min Doorstep Delivery', description: 'Enjoy piping hot gourmet snacks delivered right to your door with zero delivery fees!', image_url: 'https://images.unsplash.com/photo-1586190848861-99aa4a171e90?auto=format&fit=crop&w=1200&q=80', cta: 'Order Now', active: 1 }
   ]);
-=======
-  // Menu & Live Settings (Persisted in localStorage so Admin changes reflect immediately across customer views)
-  const [menuItems, setMenuItems] = useState(() => {
-    try {
-      const saved = localStorage.getItem('fb_menu_items');
-      return saved ? JSON.parse(saved) : INITIAL_MENU_ITEMS;
-    } catch (e) {
-      return INITIAL_MENU_ITEMS;
-    }
-  });
-
-  const [categories, setCategories] = useState(INITIAL_CATEGORIES);
-
-  const [offers, setOffers] = useState(() => {
-    try {
-      const saved = localStorage.getItem('fb_offers');
-      return saved ? JSON.parse(saved) : [
-        { id: 1, coupon_code: 'WELCOME50', title: 'Welcome Feast', description: '50% off up to ₹100 on your first delicious order', discount_type: 'percentage', discount_value: 50, minimum_order: 299, max_discount: 100, expiry_date: '30 Sep 2026', applicable_order_type: 'all', active: 1 },
-        { id: 2, coupon_code: 'BELL50', title: 'Flat ₹50 Off Special', description: 'Flat ₹50 off on minimum order of ₹250', discount_type: 'fixed', discount_value: 50, minimum_order: 250, expiry_date: '31 Oct 2026', applicable_order_type: 'all', active: 1 },
-        { id: 3, coupon_code: 'DING10', title: '10% Off Cafe Cravings', description: 'Get 10% off on all orders above ₹199', discount_type: 'percentage', discount_value: 10, minimum_order: 199, max_discount: 60, expiry_date: '15 Oct 2026', applicable_order_type: 'all', active: 1 }
-      ];
-    } catch (e) {
-      return [
-        { id: 1, coupon_code: 'WELCOME50', title: 'Welcome Feast', description: '50% off up to ₹100 on your first delicious order', discount_type: 'percentage', discount_value: 50, minimum_order: 299, max_discount: 100, expiry_date: '30 Sep 2026', applicable_order_type: 'all', active: 1 },
-        { id: 2, coupon_code: 'BELL50', title: 'Flat ₹50 Off Special', description: 'Flat ₹50 off on minimum order of ₹250', discount_type: 'fixed', discount_value: 50, minimum_order: 250, expiry_date: '31 Oct 2026', applicable_order_type: 'all', active: 1 },
-        { id: 3, coupon_code: 'DING10', title: '10% Off Cafe Cravings', description: 'Get 10% off on all orders above ₹199', discount_type: 'percentage', discount_value: 10, minimum_order: 199, max_discount: 60, expiry_date: '15 Oct 2026', applicable_order_type: 'all', active: 1 }
-      ];
-    }
-  });
-
-  // Raw Inventory & Procurement Management
-  const [inventory, setInventory] = useState(() => {
-    try {
-      const saved = localStorage.getItem('fb_inventory');
-      return saved ? JSON.parse(saved) : INITIAL_INVENTORY_ITEMS;
-    } catch (e) {
-      return INITIAL_INVENTORY_ITEMS;
-    }
-  });
-
-  const [advertisements, setAdvertisements] = useState(() => {
-    try {
-      const saved = localStorage.getItem('fb_advertisements');
-      return saved ? JSON.parse(saved) : [
-        { id: 1, type: 'Weekend Offer', title: 'Monster Crispy Burgers & Sizzling Momos', description: 'Handcrafted fresh with secret French spices and gooey molten cheese!', image_url: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=1200&q=80', cta: 'Explore Menu', active: 1 },
-        { id: 2, type: 'Combo Offer', title: 'Grand Cafe Platters for Sharing', description: 'Loaded sampler plates with fries, strips, momos and dips starting at ₹179!', image_url: 'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&w=1200&q=80', cta: 'View Platters', active: 1 },
-        { id: 3, type: 'Special Discount', title: 'Free 20-Min Doorstep Delivery', description: 'Enjoy piping hot gourmet snacks delivered right to your door with zero delivery fees!', image_url: 'https://images.unsplash.com/photo-1586190848861-99aa4a171e90?auto=format&fit=crop&w=1200&q=80', cta: 'Order Now', active: 1 }
-      ];
-    } catch (e) {
-      return [
-        { id: 1, type: 'Weekend Offer', title: 'Monster Crispy Burgers & Sizzling Momos', description: 'Handcrafted fresh with secret French spices and gooey molten cheese!', image_url: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=1200&q=80', cta: 'Explore Menu', active: 1 },
-        { id: 2, type: 'Combo Offer', title: 'Grand Cafe Platters for Sharing', description: 'Loaded sampler plates with fries, strips, momos and dips starting at ₹179!', image_url: 'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&w=1200&q=80', cta: 'View Platters', active: 1 },
-        { id: 3, type: 'Special Discount', title: 'Free 20-Min Doorstep Delivery', description: 'Enjoy piping hot gourmet snacks delivered right to your door with zero delivery fees!', image_url: 'https://images.unsplash.com/photo-1586190848861-99aa4a171e90?auto=format&fit=crop&w=1200&q=80', cta: 'Order Now', active: 1 }
-      ];
-    }
-  });
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
 
   const [settings, setSettings] = useState({
     cafe_name: 'FrenchBell Cafe',
@@ -149,11 +91,7 @@ export function AppProvider({ children }) {
   // Toasts (No Emojis)
   const [notifications, setNotifications] = useState([]);
 
-<<<<<<< HEAD
   // Save cart & orderMode to localStorage (non-sensitive client preferences)
-=======
-  // Save cart & orderMode to localStorage
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
   useEffect(() => {
     localStorage.setItem('fb_cart', JSON.stringify(cart));
   }, [cart]);
@@ -162,37 +100,6 @@ export function AppProvider({ children }) {
     localStorage.setItem('fb_order_mode', orderMode);
   }, [orderMode]);
 
-<<<<<<< HEAD
-=======
-  // Persist Menu Items (Guarantees Admin updates reflect on User side)
-  useEffect(() => {
-    try {
-      localStorage.setItem('fb_menu_items', JSON.stringify(menuItems));
-    } catch (e) {}
-  }, [menuItems]);
-
-  // Persist Offers & Coupons
-  useEffect(() => {
-    try {
-      localStorage.setItem('fb_offers', JSON.stringify(offers));
-    } catch (e) {}
-  }, [offers]);
-
-  // Persist Raw Inventory
-  useEffect(() => {
-    try {
-      localStorage.setItem('fb_inventory', JSON.stringify(inventory));
-    } catch (e) {}
-  }, [inventory]);
-
-  // Persist Advertisements
-  useEffect(() => {
-    try {
-      localStorage.setItem('fb_advertisements', JSON.stringify(advertisements));
-    } catch (e) {}
-  }, [advertisements]);
-
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
   // Check URL params on initial load for QR Table Dine-In Scan
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);

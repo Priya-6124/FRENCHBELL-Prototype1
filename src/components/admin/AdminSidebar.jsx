@@ -3,11 +3,7 @@ import {
   LayoutDashboard, ShoppingBag, Utensils, Users, Tag, Megaphone,
   Bike, CreditCard, Receipt, BarChart3, Bell, Settings,
   ArrowLeft, ChevronDown, ChevronRight, ChevronLeft,
-<<<<<<< HEAD
   X, LogOut, UserCircle
-=======
-  X, QrCode, LogOut, UserCheck
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
@@ -20,43 +16,22 @@ export default function AdminSidebar({
   setIsMobileOpen
 }) {
   const { menuItems } = useApp();
-<<<<<<< HEAD
   const { user, logout, token: authToken } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
 
-=======
-  const { user, logout } = useAuth();
-  const [collapsed, setCollapsed] = useState(false);
-
-  // Expanded sub-menus tracking
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
   const [expandedSections, setExpandedSections] = useState({
     orders: true,
     menu: false,
     customers: false,
-<<<<<<< HEAD
-=======
-    offers: false,
-    ads: false,
-    'dine-in': false,
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
     delivery: false,
     analytics: false,
     settings: false,
   });
 
-<<<<<<< HEAD
-=======
-  // Calculate badges
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
   const [newOrdersCount, setNewOrdersCount] = useState(0);
   const [outOfStockCount, setOutOfStockCount] = useState(0);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
 
-<<<<<<< HEAD
-=======
-  // Poll for counts
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
   useEffect(() => {
     if (Array.isArray(menuItems)) {
       const outCount = menuItems.filter(i => (i.available === 0 || (i.stock_quantity !== undefined && i.stock_quantity <= 0))).length;
@@ -76,7 +51,6 @@ export default function AdminSidebar({
       } catch (e) {}
 
       try {
-<<<<<<< HEAD
         const activeToken = authToken || localStorage.getItem('fb_token');
         const resNotifs = await fetch('/api/admin/notifications', {
           headers: activeToken ? { 'Authorization': `Bearer ${activeToken}` } : {}
@@ -84,12 +58,6 @@ export default function AdminSidebar({
         if (resNotifs.ok) {
           const notifs = await resNotifs.json();
           setUnreadNotifications(notifs.unreadCount ?? notifs.unread_count ?? 0);
-=======
-        const resNotifs = await fetch('/api/admin/notifications');
-        if (resNotifs.ok) {
-          const notifs = await resNotifs.json();
-          setUnreadNotifications(notifs.unread_count || 0);
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
         }
       } catch (e) {}
     };
@@ -105,22 +73,15 @@ export default function AdminSidebar({
   };
 
   const handleSelectTab = (tabId) => {
-<<<<<<< HEAD
     if (tabId === 'logout') {
       logout();
       if (onBackToSite) onBackToSite();
       return;
     }
-=======
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
     setActiveTab(tabId);
     if (setIsMobileOpen) setIsMobileOpen(false);
   };
 
-<<<<<<< HEAD
-=======
-  // Nav structure (no Dine-In, no Admin Profile, no Logout)
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
   const navItems = [
     {
       type: 'single',
@@ -155,11 +116,7 @@ export default function AdminSidebar({
       children: [
         { id: 'menu-items', label: 'Menu Items' },
         { id: 'menu-categories', label: 'Categories' },
-<<<<<<< HEAD
         { id: 'menu-availability', label: 'Availability & Stock', badge: outOfStockCount > 0 ? `${outOfStockCount}` : null },
-=======
-        { id: 'menu-availability', label: 'Availability', badge: outOfStockCount > 0 ? `${outOfStockCount}` : null },
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
       ]
     },
     {
@@ -173,7 +130,6 @@ export default function AdminSidebar({
       ]
     },
     {
-<<<<<<< HEAD
       type: 'single',
       id: 'offers-coupons',
       label: 'Offers & Coupons',
@@ -184,38 +140,6 @@ export default function AdminSidebar({
       id: 'advertisements',
       label: 'Advertisements',
       icon: Megaphone,
-=======
-      type: 'group',
-      key: 'offers',
-      label: 'Offers & Coupons',
-      icon: Tag,
-      children: [
-        { id: 'offers-coupons', label: 'Coupons' },
-        { id: 'offers-promotions', label: 'Promotions' },
-      ]
-    },
-    {
-      type: 'group',
-      key: 'ads',
-      label: 'Advertisements',
-      icon: Megaphone,
-      children: [
-        { id: 'ads-active', label: 'Active' },
-        { id: 'ads-scheduled', label: 'Scheduled' },
-        { id: 'ads-add', label: 'Add Advertisement' },
-      ]
-    },
-    {
-      type: 'group',
-      key: 'dine-in',
-      label: 'Dine-In',
-      icon: QrCode,
-      children: [
-        { id: 'dine-in-tables', label: 'Tables' },
-        { id: 'dine-in-qr', label: 'QR Codes' },
-        { id: 'dine-in-orders', label: 'Dine-In Orders' },
-      ]
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
     },
     {
       type: 'group',
@@ -223,11 +147,7 @@ export default function AdminSidebar({
       label: 'Delivery',
       icon: Bike,
       children: [
-<<<<<<< HEAD
         { id: 'delivery-orders', label: 'Delivery Orders' },
-=======
-        { id: 'delivery-orders', label: 'Orders' },
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
         { id: 'delivery-area', label: 'Delivery Area' },
         { id: 'delivery-settings', label: 'Delivery Settings' },
       ]
@@ -235,11 +155,7 @@ export default function AdminSidebar({
     {
       type: 'single',
       id: 'payments',
-<<<<<<< HEAD
       label: 'Payments',
-=======
-      label: 'Transactions',
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
       icon: CreditCard,
     },
     {
@@ -278,24 +194,17 @@ export default function AdminSidebar({
         { id: 'settings-cafe', label: 'Cafe Information' },
         { id: 'settings-hours', label: 'Business Hours' },
         { id: 'settings-orders', label: 'Order Settings' },
-<<<<<<< HEAD
-=======
-        { id: 'settings-delivery', label: 'Delivery Settings' },
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
         { id: 'settings-payment', label: 'Payment Settings' },
         { id: 'settings-admins', label: 'Admin Users' },
         { id: 'settings-logs', label: 'Activity Logs' },
       ]
     },
-<<<<<<< HEAD
     {
       type: 'single',
       id: 'admin-profile',
       label: 'Admin Profile',
       icon: UserCircle,
     },
-=======
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
   ];
 
   const sidebarContent = (
@@ -338,11 +247,7 @@ export default function AdminSidebar({
         </div>
 
         {/* Navigation list */}
-<<<<<<< HEAD
         <nav className="p-3 space-y-1 overflow-y-auto max-h-[calc(100vh-170px)] custom-scrollbar">
-=======
-        <nav className="p-3 space-y-1 overflow-y-auto max-h-[calc(100vh-120px)] custom-scrollbar">
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
           {navItems.map((item) => {
             const Icon = item.icon;
 
@@ -436,7 +341,6 @@ export default function AdminSidebar({
               </div>
             );
           })}
-<<<<<<< HEAD
 
           {/* 14. Logout Button */}
           <button
@@ -451,12 +355,6 @@ export default function AdminSidebar({
       </div>
 
       {/* Footer – Back to Website */}
-=======
-        </nav>
-      </div>
-
-      {/* Footer – Back to Website Only */}
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
       <div className="p-3 border-t border-french-gold/20 bg-french-dark/95">
         <button
           onClick={onBackToSite}

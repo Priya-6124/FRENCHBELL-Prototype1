@@ -49,13 +49,10 @@ export default function FoodCard({ item }) {
             isOutOfStock ? 'grayscale-[60%]' : 'group-hover:scale-105'
           }`}
           loading="lazy"
-<<<<<<< HEAD
           onError={(e) => {
             e.currentTarget.onerror = null;
             e.currentTarget.src = '/assets/logo.jfif';
           }}
-=======
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
         />
 
         {/* Out of Stock Dark Overlay */}

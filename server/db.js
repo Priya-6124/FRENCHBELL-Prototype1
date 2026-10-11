@@ -8,11 +8,7 @@ const __dirname = path.dirname(__filename);
 const dbJsonPath = path.join(__dirname, 'frenchbell_db.json');
 const tmpDbPath = path.join('/tmp', 'frenchbell_db.json');
 
-<<<<<<< HEAD
 // Persistent Pure Shared Database Store with ACID-style transactional atomic writes
-=======
-// In-Memory & Persisted Pure JS Database Store for instant zero-dependency execution
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
 let dbData = {
   users: [],
   menu_categories: [],
@@ -30,7 +26,6 @@ let dbData = {
   admin_password_resets: [],
   activity_logs: [],
   admin_notifications: [],
-<<<<<<< HEAD
   tables: [],
   customer_otps: []
 };
@@ -38,11 +33,6 @@ let dbData = {
 let isWriting = false;
 let pendingSave = false;
 
-=======
-  tables: []
-};
-
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
 export function getCafeBusinessDay(date = new Date()) {
   const d = new Date(date);
   // Cutoff at 2:00 AM (02:00). Orders between 00:00 and 01:59 belong to the previous day's shift!
@@ -58,11 +48,7 @@ export function getCafeBusinessDay(date = new Date()) {
 export function generateNextOrderNumber() {
   loadStore();
   const currentBusinessDay = getCafeBusinessDay(new Date());
-<<<<<<< HEAD
 
-=======
-  
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
   // Count how many orders belong to current business day
   const ordersToday = (dbData.orders || []).filter(o => {
     const oDay = getCafeBusinessDay(new Date(o.created_at || Date.now()));
@@ -75,13 +61,9 @@ export function generateNextOrderNumber() {
 
 function loadStore() {
   let loaded = false;
-<<<<<<< HEAD
   const isServerless = !!(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
 
   if (isServerless && fs.existsSync(tmpDbPath)) {
-=======
-  if ((process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) && fs.existsSync(tmpDbPath)) {
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
     try {
       const raw = fs.readFileSync(tmpDbPath, 'utf8');
       dbData = { ...dbData, ...JSON.parse(raw) };
@@ -93,7 +75,6 @@ function loadStore() {
     try {
       const raw = fs.readFileSync(dbJsonPath, 'utf8');
       dbData = { ...dbData, ...JSON.parse(raw) };
-<<<<<<< HEAD
       loaded = true;
     } catch (e) {}
   }
@@ -146,30 +127,6 @@ function saveStore() {
       pendingSave = false;
       saveStore();
     }
-=======
-    } catch (e) {}
-  }
-
-  // Ensure collections exist
-  if (!dbData.admin_invitations) dbData.admin_invitations = [];
-  if (!dbData.admin_password_resets) dbData.admin_password_resets = [];
-  if (!dbData.activity_logs) dbData.activity_logs = [];
-  if (!dbData.admin_notifications) dbData.admin_notifications = [];
-  if (!dbData.tables) dbData.tables = [];
-}
-
-function saveStore() {
-  try {
-    if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
-      fs.writeFileSync(tmpDbPath, JSON.stringify(dbData, null, 2), 'utf8');
-    } else {
-      fs.writeFileSync(dbJsonPath, JSON.stringify(dbData, null, 2), 'utf8');
-    }
-  } catch (e) {
-    try {
-      fs.writeFileSync(tmpDbPath, JSON.stringify(dbData, null, 2), 'utf8');
-    } catch (e2) {}
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
   }
 }
 
@@ -207,7 +164,6 @@ class PureDb {
     saveStore();
   }
 
-<<<<<<< HEAD
   /**
    * Transaction executor: Creates a snapshot, runs operation, commits or rolls back on error
    */
@@ -258,11 +214,6 @@ class PureDb {
     if (!dbData.customer_otps) return;
     dbData.customer_otps = dbData.customer_otps.filter(o => o.phone !== cleanPhone);
     saveStore();
-=======
-  async exec(sql) {
-    saveStore();
-    return true;
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
   }
 
   // Activity Log helper
@@ -349,7 +300,6 @@ class PureDb {
     saveStore();
   }
 
-<<<<<<< HEAD
   // Restore stock when an order is cancelled or rolled back
   restoreStockForOrderItem(menuItemId, qty) {
     loadStore();
@@ -367,15 +317,12 @@ class PureDb {
     saveStore();
   }
 
-=======
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
   async run(sql, params = []) {
     loadStore();
     const sqlUpper = sql.trim().toUpperCase();
 
     if (sqlUpper.startsWith('INSERT INTO USERS')) {
       const [name, phone, email, password_hash, role, status] = params;
-<<<<<<< HEAD
       const cleanEmail = email ? String(email).trim().toLowerCase() : null;
       const cleanPhone = phone ? String(phone).replace(/\D/g, '').slice(-10) : null;
 
@@ -397,19 +344,12 @@ class PureDb {
         }
       }
 
-=======
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
       const id = dbData.users.length ? Math.max(...dbData.users.map(u => u.id || 0)) + 1 : 1;
       const user = {
         id,
         name,
-<<<<<<< HEAD
         phone: cleanPhone,
         email: cleanEmail,
-=======
-        phone: phone || null,
-        email: email ? email.toLowerCase() : null,
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
         password_hash,
         role: role || 'customer',
         status: status || 'active',
@@ -584,10 +524,6 @@ class PureDb {
       const [order_id, menu_item_id, item_name, variant, quantity, unit_price, total_price] = params;
       const id = dbData.order_items.length ? Math.max(...dbData.order_items.map(o => o.id || 0)) + 1 : 1;
       dbData.order_items.push({ id, order_id, menu_item_id, item_name, variant, quantity, unit_price, total_price });
-<<<<<<< HEAD
-=======
-      // Decrement stock automatically
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
       if (menu_item_id) {
         this.decrementStockForOrderItem(menu_item_id, quantity);
       }
@@ -788,12 +724,8 @@ class PureDb {
 
     if (sqlUpper.includes('FROM USERS WHERE PHONE') || sqlUpper.includes('WHERE PHONE = ?')) {
       const [phone, phone2] = params;
-<<<<<<< HEAD
       const cleanPhone = String(phone || '').replace(/\D/g, '').slice(-10);
       return dbData.users.find(u => u.phone === cleanPhone || (phone2 && (u.email === phone2 || u.phone === phone2))) || null;
-=======
-      return dbData.users.find(u => u.phone === phone || (phone2 && (u.email === phone2 || u.phone === phone2))) || null;
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
     }
 
     if (sqlUpper.includes('FROM USERS WHERE ID = ?')) {

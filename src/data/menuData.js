@@ -156,11 +156,7 @@ export const INITIAL_MENU_ITEMS = [
     name: 'Chicken Honey Chilli Momos',
     description: 'Crispy chicken momos wok-tossed in sweet Thai honey garlic sauce.',
     veg_type: 'non-veg', price: 100, popular: 1, available: 1, stock_quantity: 18, prep_time_mins: 14,
-<<<<<<< HEAD
     image_url: 'https://images.unsplash.com/photo-1541696432-82c6da8ce7bf?auto=format&fit=crop&w=600&q=80'
-=======
-    image_url: 'https://images.unsplash.com/photo-1569058242253-92a9c755a0ec?auto=format&fit=crop&w=600&q=80'
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
   },
   {
     id: 21, category_id: 3, category_slug: 'momos', category_name: 'Momos',
@@ -315,44 +311,28 @@ export const INITIAL_MENU_ITEMS = [
     name: 'Cheesy Veggie Loaded Fries',
     description: 'Crispy fries topped with melted cheddar, diced peppers, jalapeños and herb cream.',
     veg_type: 'veg', price: 139, popular: 0, available: 1, stock_quantity: 15, prep_time_mins: 12,
-<<<<<<< HEAD
     image_url: 'https://images.unsplash.com/photo-1576107232684-1279f3908594?auto=format&fit=crop&w=600&q=80'
-=======
-    image_url: 'https://images.unsplash.com/photo-1585109649139-366815a0d713?auto=format&fit=crop&w=600&q=80'
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
   },
   {
     id: 42, category_id: 7, category_slug: 'loaded', category_name: 'Loaded',
     name: 'Cheesy Blaster Loaded Bowl',
     description: 'Double cheese sauce bowl with seasoned potato wedges, fries, sweet corn and spicy paprika.',
     veg_type: 'veg', price: 159, popular: 1, available: 1, stock_quantity: 16, prep_time_mins: 14,
-<<<<<<< HEAD
     image_url: 'https://images.unsplash.com/photo-1541592106381-b31e9677c0e5?auto=format&fit=crop&w=600&q=80'
-=======
-    image_url: 'https://images.unsplash.com/photo-1576107232684-1279f3908594?auto=format&fit=crop&w=600&q=80'
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
   },
   {
     id: 43, category_id: 7, category_slug: 'loaded', category_name: 'Loaded',
     name: 'Chicken Popcorn Loaded',
     description: 'Crispy golden fries layered with crunchy chicken popcorn, liquid cheese and smoky chipotle.',
     veg_type: 'non-veg', price: 169, popular: 1, available: 1, stock_quantity: 18, prep_time_mins: 15,
-<<<<<<< HEAD
     image_url: 'https://images.unsplash.com/photo-1585109649139-366815a0d713?auto=format&fit=crop&w=600&q=80'
-=======
-    image_url: 'https://images.unsplash.com/photo-1562967914-608f82629710?auto=format&fit=crop&w=600&q=80'
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
   },
   {
     id: 44, category_id: 7, category_slug: 'loaded', category_name: 'Loaded',
     name: 'Monster Meat Loaded Platter',
     description: 'The heavyweight bowl: chicken sausage, crispy strips, bacon bits, cheese lava and spicy ranch.',
     veg_type: 'non-veg', price: 189, popular: 1, available: 1, stock_quantity: 14, prep_time_mins: 16,
-<<<<<<< HEAD
     image_url: 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=600&q=80'
-=======
-    image_url: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=600&q=80'
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
   },
 
   // 8. PLATTERS
@@ -368,10 +348,6 @@ export const INITIAL_MENU_ITEMS = [
     name: 'Grand Non-Veg Cafe Feast Platter',
     description: 'Loaded banquet: crispy chicken strips, chicken momos, cheesy fries, nuggets and garlic aioli dips.',
     veg_type: 'non-veg', price: 299, popular: 1, available: 1, stock_quantity: 10, prep_time_mins: 20,
-<<<<<<< HEAD
     image_url: 'https://images.unsplash.com/photo-1565299585323-38d6b0865b47?auto=format&fit=crop&w=600&q=80'
-=======
-    image_url: 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=600&q=80'
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
   }
 ];

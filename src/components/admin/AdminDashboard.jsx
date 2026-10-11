@@ -15,10 +15,6 @@ import OrderDetailDrawer from './OrderDetailDrawer';
 import LiveOrderBoard from './LiveOrderBoard';
 import MenuManager from './MenuManager';
 import CategoryManager from './CategoryManager';
-<<<<<<< HEAD
-=======
-import InventoryManager from './InventoryManager';
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
 import CustomerManager from './CustomerManager';
 import OfferManager from './OfferManager';
 import AdvertManager from './AdvertManager';
@@ -29,10 +25,7 @@ import AnalyticsDashboard from './AnalyticsDashboard';
 import CafeSettingsManager from './CafeSettingsManager';
 import AdminUsersManager from './AdminUsersManager';
 import ActivityLogsManager from './ActivityLogsManager';
-<<<<<<< HEAD
 import NotificationsManager from './NotificationsManager';
-=======
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
 
 // Charts & Icons
 import { OrderTypeDonutChart } from './AnalyticsCharts';
@@ -47,11 +40,7 @@ import {
 } from 'lucide-react';
 
 export default function AdminDashboard({ onBackToSite }) {
-<<<<<<< HEAD
   const { user, isAdmin, logout, token } = useAuth();
-=======
-  const { user, isAdmin, logout } = useAuth();
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
   const { menuItems, addNotification } = useApp();
 
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -63,7 +52,6 @@ export default function AdminDashboard({ onBackToSite }) {
   // Sales Graph Filter Mode
   const [salesGraphMode, setSalesGraphMode] = useState('weekly'); // 'today' | 'weekly' | 'monthly'
 
-<<<<<<< HEAD
   // Executive Dashboard Stats (Real backend numbers loaded from API)
   const [dashboardStats, setDashboardStats] = useState({
     todayRevenue: 0,
@@ -75,54 +63,14 @@ export default function AdminDashboard({ onBackToSite }) {
     takeawayOrders: 0,
     deliveryOrders: 0,
     newCustomers: 0,
-=======
-  // Executive Dashboard Stats (Real backend numbers with graceful defaults)
-  const [dashboardStats, setDashboardStats] = useState({
-    todayRevenue: 14890,
-    todayOrders: 42,
-    pendingOrders: 3,
-    completedOrders: 37,
-    cancelledOrders: 2,
-    dineInOrders: 15,
-    takeawayOrders: 12,
-    deliveryOrders: 15,
-    newCustomers: 28,
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
     recentOrders: [],
     popularItems: [],
     lowStockItems: [],
     outOfStockItems: [],
     salesGraph: {
-<<<<<<< HEAD
       today: [],
       weekly: [],
       monthly: []
-=======
-      today: [
-        { date: '11:00 AM', revenue: 1200, orders: 4 },
-        { date: '01:00 PM', revenue: 2800, orders: 8 },
-        { date: '03:00 PM', revenue: 1650, orders: 5 },
-        { date: '05:00 PM', revenue: 2200, orders: 7 },
-        { date: '07:00 PM', revenue: 3950, orders: 11 },
-        { date: '09:00 PM', revenue: 4800, orders: 14 },
-        { date: '11:00 PM', revenue: 1950, orders: 6 }
-      ],
-      weekly: [
-        { date: 'Mon', revenue: 1850, orders: 8 },
-        { date: 'Tue', revenue: 2400, orders: 10 },
-        { date: 'Wed', revenue: 2100, orders: 9 },
-        { date: 'Thu', revenue: 3100, orders: 12 },
-        { date: 'Fri', revenue: 4250, orders: 16 },
-        { date: 'Sat', revenue: 5600, orders: 20 },
-        { date: 'Sun', revenue: 5100, orders: 18 }
-      ],
-      monthly: [
-        { date: 'Week 1', revenue: 24500, orders: 120 },
-        { date: 'Week 2', revenue: 31200, orders: 148 },
-        { date: 'Week 3', revenue: 28900, orders: 135 },
-        { date: 'Week 4', revenue: 36400, orders: 172 }
-      ]
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
     }
   });
   const [loadingStats, setLoadingStats] = useState(false);
@@ -138,26 +86,17 @@ export default function AdminDashboard({ onBackToSite }) {
   const fetchDashboardStats = async () => {
     setLoadingStats(true);
     try {
-<<<<<<< HEAD
       const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
 
       // 1. Fetch live orders
       const resOrders = await fetch('/api/orders', { headers });
-=======
-      // 1. Fetch live orders
-      const resOrders = await fetch('/api/orders');
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
       let ordersList = [];
       if (resOrders.ok) {
         ordersList = await resOrders.json();
       }
 
       // 2. Fetch live analytics summary
-<<<<<<< HEAD
       const resSummary = await fetch('/api/analytics/summary', { headers });
-=======
-      const resSummary = await fetch('/api/analytics/summary');
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
       let summaryData = null;
       if (resSummary.ok) {
         summaryData = await resSummary.json();
@@ -166,24 +105,15 @@ export default function AdminDashboard({ onBackToSite }) {
       if (summaryData) {
         setDashboardStats(prev => ({
           ...prev,
-<<<<<<< HEAD
           todayRevenue: summaryData.today_revenue !== undefined ? summaryData.today_revenue : prev.todayRevenue,
           todayOrders: summaryData.total_orders !== undefined ? summaryData.total_orders : (ordersList.length || prev.todayOrders),
-=======
-          todayRevenue: summaryData.today_revenue || prev.todayRevenue,
-          todayOrders: summaryData.total_orders || ordersList.length || prev.todayOrders,
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
           pendingOrders: summaryData.pending_orders || 0,
           completedOrders: summaryData.completed_orders || 0,
           cancelledOrders: summaryData.cancelled_orders || 0,
           dineInOrders: summaryData.dine_in_orders || 0,
           takeawayOrders: summaryData.takeaway_orders || 0,
           deliveryOrders: summaryData.delivery_orders || 0,
-<<<<<<< HEAD
           newCustomers: summaryData.new_customers !== undefined ? summaryData.new_customers : (summaryData.active_customers || 0),
-=======
-          newCustomers: summaryData.new_customers || summaryData.active_customers || 28,
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
           recentOrders: ordersList.slice(0, 7),
           popularItems: summaryData.popular_items && summaryData.popular_items.length ? summaryData.popular_items : prev.popularItems,
           lowStockItems: summaryData.low_stock_items || contextLowStock,
@@ -572,7 +502,6 @@ export default function AdminDashboard({ onBackToSite }) {
                   </div>
 
                   <div className="space-y-3">
-<<<<<<< HEAD
                     {dashboardStats.popularItems && dashboardStats.popularItems.length > 0 ? (
                       dashboardStats.popularItems.map((item, idx) => (
                         <div
@@ -610,45 +539,6 @@ export default function AdminDashboard({ onBackToSite }) {
                         No product sales recorded yet today. Popular items will rank here based on customer demand.
                       </div>
                     )}
-=======
-                    {(dashboardStats.popularItems && dashboardStats.popularItems.length > 0 ? dashboardStats.popularItems : [
-                      { name: 'Cheesy Blaster Loaded Fries', quantity: 18, revenue: 3222 },
-                      { name: 'Double Zinger Burger', quantity: 15, revenue: 2985 },
-                      { name: 'Crispy Strips & Dip', quantity: 12, revenue: 1788 },
-                      { name: 'Steamed Chicken Momos', quantity: 10, revenue: 990 },
-                      { name: 'FB Signature Cold Coffee', quantity: 8, revenue: 792 }
-                    ]).map((item, idx) => (
-                      <div
-                        key={item.name}
-                        className="p-3.5 rounded-2xl bg-french-cream/50 border border-french-gold/20 flex items-center justify-between gap-3 hover:border-french-gold/50 transition-all"
-                      >
-                        <div className="flex items-center gap-3">
-                          <span className={`w-7 h-7 rounded-xl flex items-center justify-center font-mono font-black text-xs ${
-                            idx === 0 ? 'bg-french-gold text-french-dark' : 'bg-french-dark text-french-cream'
-                          }`}>
-                            #{idx + 1}
-                          </span>
-                          <div>
-                            <h5 className="font-serif font-bold text-sm text-french-dark leading-tight">
-                              {item.name}
-                            </h5>
-                            <span className="text-[10px] font-bold text-french-muted uppercase">
-                              {item.quantity} units sold
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="text-right">
-                          <span className="font-serif font-black text-sm text-french-dark block">
-                            ₹{item.revenue.toLocaleString('en-IN')}
-                          </span>
-                          <span className="text-[10px] font-bold text-emerald-700 block">
-                            Revenue generated
-                          </span>
-                        </div>
-                      </div>
-                    ))}
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
                   </div>
                 </div>
 
@@ -776,7 +666,6 @@ export default function AdminDashboard({ onBackToSite }) {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-french-gold/15 text-french-dark font-medium">
-<<<<<<< HEAD
                       {dashboardStats.recentOrders && dashboardStats.recentOrders.length > 0 ? (
                         dashboardStats.recentOrders.map(ord => (
                           <tr
@@ -840,67 +729,6 @@ export default function AdminDashboard({ onBackToSite }) {
                           </td>
                         </tr>
                       )}
-=======
-                      {(dashboardStats.recentOrders.length > 0 ? dashboardStats.recentOrders : [
-                        { id: 1, order_number: 'FB001', customer_name: 'Priya Sundaram', phone: '9876501234', order_type: 'delivery', total: 241, payment_status: 'paid', order_status: 'received', created_at: new Date().toISOString() },
-                        { id: 2, order_number: 'FB002', customer_name: 'Amit Patel', phone: '9811223344', order_type: 'dine-in', table_number: '04', total: 358, payment_status: 'paid', order_status: 'preparing', created_at: new Date().toISOString() },
-                        { id: 3, order_number: 'FB003', customer_name: 'Sara Khan', phone: '9988776655', order_type: 'takeaway', total: 188, payment_status: 'paid', order_status: 'ready', created_at: new Date().toISOString() }
-                      ]).map(ord => (
-                        <tr
-                          key={ord.id || ord.order_number}
-                          onClick={() => setSelectedOrder(ord)}
-                          className="hover:bg-french-cream/60 cursor-pointer transition-colors group"
-                        >
-                          <td className="p-3 font-mono font-bold text-french-gold">
-                            <span className="bg-french-dark px-2 py-0.5 rounded">
-                              #{ord.order_number}
-                            </span>
-                          </td>
-                          <td className="p-3 font-serif font-bold text-french-dark">
-                            {ord.customer_name}
-                            <span className="block font-mono text-[10px] text-french-muted font-normal">
-                              +91 {ord.phone}
-                            </span>
-                          </td>
-                          <td className="p-3 uppercase text-[10px] font-bold">
-                            <span className={`px-2 py-0.5 rounded-full ${
-                              ord.order_type === 'dine-in' ? 'bg-purple-100 text-purple-900' :
-                              ord.order_type === 'takeaway' ? 'bg-amber-100 text-amber-900' :
-                              'bg-blue-100 text-blue-900'
-                            }`}>
-                              {ord.order_type}
-                            </span>
-                          </td>
-                          <td className="p-3 font-serif font-black text-sm text-french-dark">
-                            ₹{ord.total}
-                          </td>
-                          <td className="p-3">
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-emerald-100 text-emerald-800">
-                              {ord.payment_status || 'PAID'}
-                            </span>
-                          </td>
-                          <td className="p-3">
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-french-cream border border-french-gold/30 text-french-dark">
-                              {(ord.order_status || 'received').replace('_', ' ')}
-                            </span>
-                          </td>
-                          <td className="p-3 text-[11px] text-french-muted font-mono">
-                            {ord.created_at ? new Date(ord.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Now'}
-                          </td>
-                          <td className="p-3 text-right">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedOrder(ord);
-                              }}
-                              className="px-2.5 py-1 rounded-lg bg-french-dark text-french-gold group-hover:bg-french-gold group-hover:text-french-dark font-bold text-[10px] uppercase transition-all"
-                            >
-                              View Drawer
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
                     </tbody>
                   </table>
                 </div>
@@ -924,20 +752,10 @@ export default function AdminDashboard({ onBackToSite }) {
           {activeTab === 'customers-orders' && <CustomerManager initialTab="history" />}
 
           {/* TAB: OFFERS & COUPONS */}
-<<<<<<< HEAD
           {activeTab === 'offers-coupons' && <OfferManager />}
 
           {/* TAB: ADVERTISEMENTS */}
           {activeTab === 'advertisements' && <AdvertManager />}
-=======
-          {activeTab === 'offers-coupons' && <OfferManager initialTab="coupons" />}
-          {activeTab === 'offers-promotions' && <OfferManager initialTab="promotions" />}
-
-          {/* TAB: ADVERTISEMENTS */}
-          {activeTab === 'ads-active' && <AdvertManager initialTab="active" />}
-          {activeTab === 'ads-scheduled' && <AdvertManager initialTab="scheduled" />}
-          {activeTab === 'ads-add' && <AdvertManager initialTab="add" />}
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
 
           {/* TAB: DELIVERY */}
           {activeTab === 'delivery-orders' && <LiveOrderBoard initialFilterType="delivery" />}
@@ -964,37 +782,13 @@ export default function AdminDashboard({ onBackToSite }) {
           {activeTab === 'analytics' && <AnalyticsDashboard />}
 
           {/* TAB: NOTIFICATIONS */}
-<<<<<<< HEAD
           {activeTab === 'notifications' && <NotificationsManager />}
-=======
-          {activeTab === 'notifications' && (
-            <div className="space-y-6">
-              <div className="p-6 rounded-3xl bg-french-dark text-french-cream border border-french-gold/30 shadow-xl flex items-center justify-between">
-                <div>
-                  <div className="flex items-center gap-2 text-french-gold text-xs font-bold uppercase tracking-wider mb-1">
-                    <Bell className="w-4 h-4" />
-                    <span>Audit & Live Feed</span>
-                  </div>
-                  <h2 className="font-serif font-black text-2xl text-french-cream">
-                    SYSTEM NOTIFICATIONS & AUDIT REGISTER
-                  </h2>
-                </div>
-              </div>
-              <ActivityLogsManager />
-            </div>
-          )}
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
 
           {/* TAB: SETTINGS SUBTABS */}
           {activeTab === 'settings-cafe' && <CafeSettingsManager initialTab="cafe-info" />}
           {activeTab === 'settings-hours' && <CafeSettingsManager initialTab="business-hours" />}
           {activeTab === 'settings-orders' && <CafeSettingsManager initialTab="order-settings" />}
-<<<<<<< HEAD
           {activeTab === 'settings-payment' && <CafeSettingsManager initialTab="payment-settings" />}
-=======
-          {activeTab === 'settings-delivery' && <CafeSettingsManager initialTab="delivery-settings" />}
-          {activeTab === 'settings-payment' && <PaymentManager />}
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
           {activeTab === 'settings-admins' && <AdminUsersManager />}
           {activeTab === 'settings-logs' && <ActivityLogsManager />}
           {activeTab === 'settings' && <CafeSettingsManager />}

@@ -93,13 +93,10 @@ export default function OffersSection({ onExploreClick }) {
                   alt={offer.title}
                   className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                   loading="lazy"
-<<<<<<< HEAD
                   onError={(e) => {
                     e.currentTarget.onerror = null;
                     e.currentTarget.src = '/assets/logo.jfif';
                   }}
-=======
->>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-french-dark via-transparent to-transparent opacity-80" />
 
