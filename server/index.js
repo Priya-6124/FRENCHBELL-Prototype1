@@ -19,8 +19,26 @@ const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || 'frenchbell_secret_key_2026_cafe';
 
 app.use(cors());
+
+// Normalize URLs so routes match on both localhost and Vercel serverless rewrites
+app.use((req, res, next) => {
+  if (req.url && !req.url.startsWith('/api') && !req.url.startsWith('/assets')) {
+    req.url = '/api' + (req.url.startsWith('/') ? req.url : '/' + req.url);
+  }
+  next();
+});
+
 app.use(express.json({ limit: '25mb' }));
 app.use(express.urlencoded({ extended: true, limit: '25mb' }));
+
+// Health / Status endpoints
+app.get('/api', (req, res) => {
+  res.json({ name: 'FrenchBell Cafe API', status: 'online', time: new Date().toISOString() });
+});
+
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', serverless: !!process.env.VERCEL });
+});
 
 // Serve static assets from public folder
 const publicDir = path.join(__dirname, '../public');

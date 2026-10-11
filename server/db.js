@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import initialStore from './initialStore.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -63,18 +64,47 @@ function loadStore() {
   let loaded = false;
   const isServerless = !!(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
 
+  // 1. Check /tmp on serverless environments (contains recent mutations)
   if (isServerless && fs.existsSync(tmpDbPath)) {
     try {
       const raw = fs.readFileSync(tmpDbPath, 'utf8');
-      dbData = { ...dbData, ...JSON.parse(raw) };
-      loaded = true;
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        dbData = { ...dbData, ...parsed };
+        loaded = true;
+      }
     } catch (e) {}
   }
 
-  if (!loaded && fs.existsSync(dbJsonPath)) {
+  // 2. Search all potential filesystem locations for frenchbell_db.json
+  if (!loaded) {
+    const candidatePaths = [
+      path.join(process.cwd(), 'server', 'frenchbell_db.json'),
+      path.join(__dirname, 'frenchbell_db.json'),
+      path.join(__dirname, '../server', 'frenchbell_db.json'),
+      path.join(process.cwd(), 'frenchbell_db.json'),
+    ];
+
+    for (const candidate of candidatePaths) {
+      if (fs.existsSync(candidate)) {
+        try {
+          const raw = fs.readFileSync(candidate, 'utf8');
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed === 'object') {
+            dbData = { ...dbData, ...parsed };
+            loaded = true;
+            break;
+          }
+        } catch (e) {}
+      }
+    }
+  }
+
+  // 3. Robust Serverless Fallback: Use bundled initialStore if file system is read-only or file missing
+  if (!loaded && initialStore) {
     try {
-      const raw = fs.readFileSync(dbJsonPath, 'utf8');
-      dbData = { ...dbData, ...JSON.parse(raw) };
+      const fallbackCopy = JSON.parse(JSON.stringify(initialStore));
+      dbData = { ...dbData, ...fallbackCopy };
       loaded = true;
     } catch (e) {}
   }
