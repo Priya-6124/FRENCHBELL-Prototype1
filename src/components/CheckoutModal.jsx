@@ -34,14 +34,21 @@ export default function CheckoutModal({ onClose, onOrderPlaced }) {
     deliveryCharge,
     grandTotal,
     orderMode,
+<<<<<<< HEAD
     appliedOffer,
+=======
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
     dineInDetails,
     takeawayDetails,
     deliveryDetails,
     clearCart,
     addNotification
   } = useApp();
+<<<<<<< HEAD
   const { user, token, sendOtp, verifyOtp } = useAuth();
+=======
+  const { user, sendOtp, verifyOtp } = useAuth();
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
 
   // If user is not logged in, prompt Mobile OTP inside checkout
   const [authStep, setAuthStep] = useState(user ? 'ready' : 'phone'); // 'ready' | 'phone' | 'otp'
@@ -50,6 +57,10 @@ export default function CheckoutModal({ onClose, onOrderPlaced }) {
   const [otpCode, setOtpCode] = useState(['', '', '', '']);
   const [authError, setAuthError] = useState('');
   const [isSendingOtp, setIsSendingOtp] = useState(false);
+<<<<<<< HEAD
+=======
+  const [simulatedOtp, setSimulatedOtp] = useState('');
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
   const [whatsappOptIn, setWhatsappOptIn] = useState(true);
 
   // Payment Selection
@@ -70,18 +81,31 @@ export default function CheckoutModal({ onClose, onOrderPlaced }) {
     setAuthError('');
     const cleanPhone = otpPhone.replace(/\D/g, '').slice(-10);
     if (!cleanPhone || cleanPhone.length !== 10) {
+<<<<<<< HEAD
       setAuthError('Please enter a valid 10-digit mobile number.');
+=======
+      setAuthError('Please enter a valid mobile number.');
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
       return;
     }
     setIsSendingOtp(true);
     try {
+<<<<<<< HEAD
       await sendOtp(cleanPhone);
+=======
+      const code = await sendOtp(cleanPhone);
+      setSimulatedOtp(code);
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
       setOtpCode(['', '', '', '']);
       setAuthStep('otp');
       setIsSendingOtp(false);
     } catch (err) {
       setIsSendingOtp(false);
+<<<<<<< HEAD
       setAuthError(err.message || 'Failed to send verification code. Check SMS gateway configuration.');
+=======
+      setAuthError(err.message || 'Failed to send verification code');
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
     }
   };
 
@@ -89,8 +113,13 @@ export default function CheckoutModal({ onClose, onOrderPlaced }) {
     if (e) e.preventDefault();
     setAuthError('');
     const fullOtp = otpCode.join('');
+<<<<<<< HEAD
     if (fullOtp.length < 4) {
       setAuthError('Please enter the complete 4-digit verification code.');
+=======
+    if (fullOtp.length !== 4) {
+      setAuthError('Please enter the complete 4-digit OTP');
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
       return;
     }
     setIsSendingOtp(true);
@@ -101,6 +130,7 @@ export default function CheckoutModal({ onClose, onOrderPlaced }) {
       addNotification('Mobile Verified', 'You are verified and ready to place your order!', 'success');
     } catch (err) {
       setIsSendingOtp(false);
+<<<<<<< HEAD
       setAuthError(err.message || 'The verification code is incorrect. Please try again.');
     }
   };
@@ -122,6 +152,21 @@ export default function CheckoutModal({ onClose, onOrderPlaced }) {
 
     const payload = {
       user_id: user.id || null,
+=======
+      setAuthError(err.message || 'The OTP is incorrect. Please try again.');
+    }
+  };
+
+  // Process Payment and Place Order
+  const handleExecutePayment = async () => {
+    setIsProcessingPayment(true);
+
+    const customerName = user?.name || otpName || 'Valued Foodie';
+    const customerPhone = user?.phone || otpPhone || '9876543210';
+
+    const payload = {
+      user_id: user?.id || null,
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
       order_type: orderMode,
       table_number: orderMode === 'dine-in' ? (dineInDetails.tableNumber || '04') : null,
       num_people: orderMode === 'dine-in' ? (dineInDetails.numPeople || 2) : null,
@@ -131,6 +176,7 @@ export default function CheckoutModal({ onClose, onOrderPlaced }) {
       delivery_address: orderMode === 'delivery' ? (deliveryDetails.address || 'K. Narayanpura') : null,
       landmark: orderMode === 'delivery' ? deliveryDetails.landmark : null,
       pincode: orderMode === 'delivery' ? deliveryDetails.pincode : null,
+<<<<<<< HEAD
       delivery_distance_km: 1.5,
       subtotal: cartSubtotal,
       discount: discountAmount,
@@ -138,6 +184,13 @@ export default function CheckoutModal({ onClose, onOrderPlaced }) {
       delivery_charge: deliveryCharge,
       total: grandTotal,
       payment_method: paymentMethod === 'cash' ? 'cash' : `simulated_${paymentMethod}_${upiApp}`,
+=======
+      subtotal: cartSubtotal,
+      discount: discountAmount,
+      delivery_charge: deliveryCharge,
+      total: grandTotal,
+      payment_method: paymentMethod === 'cash' ? 'cash' : `dummy_${paymentMethod}_${upiApp}`,
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
       special_instructions: orderMode === 'dine-in'
         ? dineInDetails.instructions
         : (orderMode === 'takeaway' ? takeawayDetails.instructions : deliveryDetails.instructions),
@@ -148,7 +201,11 @@ export default function CheckoutModal({ onClose, onOrderPlaced }) {
         quantity: i.quantity,
         unit_price: i.price,
         total_price: i.price * i.quantity,
+<<<<<<< HEAD
         special_instructions: i.special_instructions || i.specialInstructions || ''
+=======
+        special_instructions: i.special_instructions || ''
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
       }))
     };
 
@@ -156,6 +213,7 @@ export default function CheckoutModal({ onClose, onOrderPlaced }) {
       // 1. Create order in database
       const res = await fetch('/api/orders', {
         method: 'POST',
+<<<<<<< HEAD
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { 'Authorization': `Bearer ${token}` } : {})
@@ -172,6 +230,17 @@ export default function CheckoutModal({ onClose, onOrderPlaced }) {
       if (!placedOrder) {
         throw new Error('Order creation could not be confirmed by the server.');
       }
+=======
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const orderData = await res.json();
+      const placedOrder = orderData.order || {
+        ...payload,
+        order_number: orderData.order_number || 'FB001',
+        id: Date.now()
+      };
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
 
       // 2. Server-side payment verification
       try {
@@ -182,7 +251,11 @@ export default function CheckoutModal({ onClose, onOrderPlaced }) {
             order_number: placedOrder.order_number,
             order_id: placedOrder.id,
             payment_method: payload.payment_method,
+<<<<<<< HEAD
             amount: placedOrder.total
+=======
+            amount: grandTotal
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
           })
         });
       } catch (verifyErr) {
@@ -228,11 +301,37 @@ export default function CheckoutModal({ onClose, onOrderPlaced }) {
             onOrderPlaced(placedOrder);
           }
         }, 1200);
+<<<<<<< HEAD
       }, 1200);
 
     } catch (err) {
       setIsProcessingPayment(false);
       addNotification('Order Failed', err.message || 'Unable to place order. Please try again.', 'error');
+=======
+      }, 1400);
+
+    } catch (err) {
+      // Fallback offline order generation
+      setTimeout(() => {
+        setIsProcessingPayment(false);
+        setPaymentSuccess(true);
+        playPaymentSuccessSound();
+
+        const fallbackNum = 'FB' + String(Math.floor(1 + Math.random() * 50)).padStart(3, '0');
+        const mockOrder = {
+          ...payload,
+          id: Date.now(),
+          order_number: fallbackNum,
+          created_at: new Date().toISOString()
+        };
+
+        setTimeout(() => {
+          clearCart();
+          if (onClose) onClose();
+          if (onOrderPlaced) onOrderPlaced(mockOrder);
+        }, 1200);
+      }, 1400);
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
     }
   };
 
@@ -356,17 +455,35 @@ export default function CheckoutModal({ onClose, onOrderPlaced }) {
                     disabled={isSendingOtp || otpPhone.length < 10}
                     className="w-full py-3 rounded-xl bg-french-dark text-french-gold font-extrabold text-xs uppercase tracking-wider hover:bg-french-gold hover:text-french-dark transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                   >
+<<<<<<< HEAD
                     <span>{isSendingOtp ? 'Sending Code...' : 'Send Verification Code'}</span>
+=======
+                    <span>{isSendingOtp ? 'Sending Code...' : 'Send 4-Digit OTP'}</span>
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
                     <ArrowRight className="w-4 h-4" />
                   </button>
                 </form>
               ) : (
                 <form onSubmit={handleVerifyOtp} className="space-y-3.5 max-w-sm mx-auto">
+<<<<<<< HEAD
                   <p className="text-xs text-center text-french-muted mb-2">
                     Enter the 4-digit SMS verification code sent to <strong>+91 {otpPhone}</strong>
                   </p>
 
                   <div className="flex justify-center gap-2">
+=======
+                  {simulatedOtp && (
+                    <div
+                      onClick={() => setOtpCode(simulatedOtp.split(''))}
+                      className="p-2.5 rounded-xl bg-french-dark text-french-gold text-xs font-mono cursor-pointer border border-french-gold/40 hover:border-french-gold text-left flex items-center justify-between"
+                    >
+                      <span>Simulated Code: <strong>{simulatedOtp}</strong></span>
+                      <span className="text-[10px] bg-french-gold/20 px-2 py-0.5 rounded">Autofill</span>
+                    </div>
+                  )}
+
+                  <div className="flex justify-center gap-2.5">
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
                     {[0, 1, 2, 3].map((idx) => (
                       <input
                         key={idx}
@@ -388,14 +505,22 @@ export default function CheckoutModal({ onClose, onOrderPlaced }) {
                             e.target.previousSibling.focus();
                           }
                         }}
+<<<<<<< HEAD
                         className="w-10 h-13 text-center text-xl font-mono font-bold rounded-xl border-2 border-french-gold/40 bg-white focus:border-french-gold focus:outline-none"
+=======
+                        className="w-12 h-14 text-center text-2xl font-mono font-bold rounded-xl border-2 border-french-gold/40 bg-white focus:border-french-gold focus:outline-none"
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
                       />
                     ))}
                   </div>
 
                   <button
                     type="submit"
+<<<<<<< HEAD
                     disabled={isSendingOtp || otpCode.join('').length < 4}
+=======
+                    disabled={isSendingOtp || otpCode.join('').length !== 4}
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
                     className="w-full py-3 rounded-xl bg-french-gold text-french-dark font-extrabold text-xs uppercase tracking-wider hover:bg-french-gold-hover transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                   >
                     <CheckCircle2 className="w-4 h-4" />
@@ -578,7 +703,11 @@ export default function CheckoutModal({ onClose, onOrderPlaced }) {
               <div className="flex items-center gap-2.5 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-900 text-xs">
                 <MessageSquare className="w-4 h-4 text-emerald-600 flex-shrink-0" />
                 <span>
+<<<<<<< HEAD
                   Order confirmation and live updates will be sent to <strong>+91 {user?.phone || otpPhone}</strong>
+=======
+                  Order confirmation and live updates will be sent to <strong>+91 {user?.phone || otpPhone || '9876543210'}</strong>
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
                 </span>
               </div>
 

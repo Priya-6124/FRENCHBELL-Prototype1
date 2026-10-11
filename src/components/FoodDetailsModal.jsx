@@ -62,10 +62,13 @@ export default function FoodDetailsModal({ onClose }) {
             src={selectedFood.image_url}
             alt={selectedFood.name}
             className={`w-full h-full object-cover ${isOutOfStock ? 'grayscale-[60%]' : ''}`}
+<<<<<<< HEAD
             onError={(e) => {
               e.currentTarget.onerror = null;
               e.currentTarget.src = '/assets/logo.jfif';
             }}
+=======
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
           />
           <div className="absolute inset-0 bg-gradient-to-t from-french-card via-transparent to-transparent" />
 
@@ -158,6 +161,7 @@ export default function FoodDetailsModal({ onClose }) {
           {/* Quantity Selector */}
           {!isOutOfStock && (
             <div className="flex items-center justify-between p-4 rounded-2xl bg-french-cream/60 border border-french-gold/25">
+<<<<<<< HEAD
               <div>
                 <span className="text-xs font-bold uppercase tracking-wider text-french-dark block">
                   Quantity
@@ -168,6 +172,11 @@ export default function FoodDetailsModal({ onClose }) {
                   </span>
                 )}
               </div>
+=======
+              <span className="text-xs font-bold uppercase tracking-wider text-french-dark">
+                Quantity
+              </span>
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
 
               <div className="flex items-center gap-3">
                 <button
@@ -185,10 +194,14 @@ export default function FoodDetailsModal({ onClose }) {
 
                 <button
                   type="button"
+<<<<<<< HEAD
                   onClick={() => {
                     const maxStock = selectedFood.stock_quantity !== undefined ? Number(selectedFood.stock_quantity) : 99;
                     setQuantity(q => Math.min(maxStock, q + 1));
                   }}
+=======
+                  onClick={() => setQuantity(q => q + 1)}
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
                   className="w-9 h-9 rounded-xl bg-french-dark text-french-gold flex items-center justify-center hover:bg-french-gold hover:text-french-dark transition-colors"
                   aria-label="Increase quantity"
                 >

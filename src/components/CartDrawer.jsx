@@ -220,10 +220,13 @@ export default function CartDrawer() {
                             src={item.image_url}
                             alt={item.name}
                             className="w-full h-full object-cover"
+<<<<<<< HEAD
                             onError={(e) => {
                               e.currentTarget.onerror = null;
                               e.currentTarget.src = '/assets/logo.jfif';
                             }}
+=======
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
                           />
                         </div>
 

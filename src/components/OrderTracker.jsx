@@ -13,6 +13,7 @@ export default function OrderTracker({ order: propOrder, onClose }) {
     created_at: new Date().toISOString()
   };
 
+<<<<<<< HEAD
   const [liveOrder, setLiveOrder] = useState(order);
   const [status, setStatus] = useState(order.order_status || 'received');
 
@@ -52,6 +53,26 @@ export default function OrderTracker({ order: propOrder, onClose }) {
       return [
         { id: 'received', label: 'Order Received', desc: 'Kitchen acknowledged' },
         { id: 'accepted', label: 'Accepted', desc: 'Queued for preparation' },
+=======
+  const [status, setStatus] = useState(order.order_status || 'preparing');
+
+  useEffect(() => {
+    setStatus(order.order_status || 'preparing');
+  }, [order]);
+
+  const getSteps = () => {
+    if (order.order_type === 'dine-in') {
+      return [
+        { id: 'received', label: 'Order Received', desc: 'Sent to kitchen' },
+        { id: 'preparing', label: 'Preparing', desc: 'Cooking fresh in kitchen' },
+        { id: 'ready', label: 'Ready to Serve', desc: 'Plated for serving' },
+        { id: 'completed', label: 'Served', desc: 'Served at Table #' + (order.table_number || '04') }
+      ];
+    }
+    if (order.order_type === 'takeaway') {
+      return [
+        { id: 'received', label: 'Order Received', desc: 'Kitchen acknowledged' },
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
         { id: 'preparing', label: 'Preparing', desc: 'Cooking & packing' },
         { id: 'ready', label: 'Ready for Pickup', desc: 'Ready at counter' },
         { id: 'completed', label: 'Picked Up', desc: 'Handed over' }
@@ -60,16 +81,25 @@ export default function OrderTracker({ order: propOrder, onClose }) {
     // Delivery default
     return [
       { id: 'received', label: 'Order Received', desc: 'Confirmed by FrenchBell' },
+<<<<<<< HEAD
       { id: 'accepted', label: 'Accepted', desc: 'Kitchen preparing order' },
       { id: 'preparing', label: 'Preparing', desc: 'Cooking & carefully packing' },
       { id: 'ready', label: 'Ready for Dispatch', desc: 'Packed and waiting for rider' },
       { id: 'out_for_delivery', label: 'Out for Delivery', desc: 'Delivery partner on the way' },
+=======
+      { id: 'preparing', label: 'Preparing', desc: 'Cooking & carefully packing' },
+      { id: 'ready', label: 'Out for Delivery', desc: 'Delivery partner on the way' },
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
       { id: 'completed', label: 'Delivered', desc: 'Delivered to your address' }
     ];
   };
 
   const steps = getSteps();
+<<<<<<< HEAD
   const currentStepIndex = steps.findIndex(s => s.id === status) !== -1 ? steps.findIndex(s => s.id === status) : 0;
+=======
+  const currentStepIndex = steps.findIndex(s => s.id === status) !== -1 ? steps.findIndex(s => s.id === status) : 1;
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-french-dark/80 backdrop-blur-md animate-fadeIn">
@@ -157,6 +187,7 @@ export default function OrderTracker({ order: propOrder, onClose }) {
         </div>
 
         {/* Download Receipt button */}
+<<<<<<< HEAD
         <div className="pt-2 flex items-center justify-between border-t border-french-gold/20">
           <a
             href={`/api/receipts/${liveOrder.order_number || order.order_number}/download`}
@@ -170,6 +201,36 @@ export default function OrderTracker({ order: propOrder, onClose }) {
           <span className="text-[11px] text-french-muted">
             Status: <strong className="uppercase text-french-dark">{status}</strong>
           </span>
+=======
+        <div className="pt-2 flex items-center justify-between">
+          <a
+            href={`/api/receipts/${order.order_number}/download`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs font-bold text-french-gold hover:underline inline-flex items-center gap-1.5"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Download Digital Receipt</span>
+          </a>
+        </div>
+
+        {/* Dev Quick Advance Controls for testing */}
+        <div className="pt-4 border-t border-french-gold/20 flex items-center justify-between text-xs">
+          <span className="text-french-muted font-medium">Demo Simulator: Advance Status</span>
+          <div className="flex gap-1.5">
+            {steps.map((s) => (
+              <button
+                key={s.id}
+                onClick={() => setStatus(s.id)}
+                className={`px-2.5 py-1 rounded-md text-[10px] font-bold border transition-all ${
+                  status === s.id ? 'bg-french-dark text-french-gold border-french-gold' : 'bg-french-cream text-french-dark border-french-gold/20'
+                }`}
+              >
+                {s.label.split(' ')[0]}
+              </button>
+            ))}
+          </div>
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
         </div>
 
       </div>

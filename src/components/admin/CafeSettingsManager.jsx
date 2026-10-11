@@ -3,7 +3,11 @@ import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import {
   Store, Clock, ToggleLeft, ToggleRight, MapPin, Phone, Mail,
+<<<<<<< HEAD
   CheckCircle2, Save, Bike, Utensils, ShoppingBag, ShieldCheck, CreditCard
+=======
+  CheckCircle2, Save, Bike, Utensils, ShoppingBag, ShieldCheck
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
 } from 'lucide-react';
 
 const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -12,6 +16,7 @@ export default function CafeSettingsManager({ initialTab = 'cafe-info' }) {
   const { settings, setSettings, addNotification } = useApp();
   const { token } = useAuth();
 
+<<<<<<< HEAD
   const [activeSubTab, setActiveSubTab] = useState(initialTab === 'payment-settings' ? 'payment-settings' : initialTab);
   const [loading, setLoading] = useState(false);
 
@@ -21,6 +26,11 @@ export default function CafeSettingsManager({ initialTab = 'cafe-info' }) {
     }
   }, [initialTab]);
 
+=======
+  const [activeSubTab, setActiveSubTab] = useState(initialTab);
+  const [loading, setLoading] = useState(false);
+
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
   // 1. Cafe Information Form State
   const [cafeName, setCafeName] = useState(settings.cafe_name || 'FrenchBell Cafe');
   const [cafePhone, setCafePhone] = useState(settings.cafe_phone || '+91 98765 43210');
@@ -57,6 +67,7 @@ export default function CafeSettingsManager({ initialTab = 'cafe-info' }) {
   const [deliveryFeePerKm, setDeliveryFeePerKm] = useState(settings.delivery_fee_per_km || '15');
   const [minOrderDelivery, setMinOrderDelivery] = useState(settings.min_order_delivery || '120');
 
+<<<<<<< HEAD
   // 5. Payment Settings Form State
   const [upiEnabled, setUpiEnabled] = useState(settings.upi_enabled !== '0');
   const [cashEnabled, setCashEnabled] = useState(settings.cash_enabled !== '0');
@@ -64,6 +75,8 @@ export default function CafeSettingsManager({ initialTab = 'cafe-info' }) {
   const [taxRatePercent, setTaxRatePercent] = useState(settings.tax_rate_percent || '5');
   const [gstNumber, setGstNumber] = useState(settings.gst_number || '29ABCDE1234F1Z5');
 
+=======
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
   const handleSaveSettings = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -82,12 +95,16 @@ export default function CafeSettingsManager({ initialTab = 'cafe-info' }) {
       default_prep_time_mins: String(defaultPrepTime),
       free_delivery_km: String(freeKm),
       delivery_fee_per_km: String(deliveryFeePerKm),
+<<<<<<< HEAD
       min_order_delivery: String(minOrderDelivery),
       upi_enabled: upiEnabled ? '1' : '0',
       cash_enabled: cashEnabled ? '1' : '0',
       card_enabled: cardEnabled ? '1' : '0',
       tax_rate_percent: String(taxRatePercent),
       gst_number: String(gstNumber)
+=======
+      min_order_delivery: String(minOrderDelivery)
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
     };
 
     setSettings(prev => ({ ...prev, ...updated }));
@@ -140,7 +157,11 @@ export default function CafeSettingsManager({ initialTab = 'cafe-info' }) {
             CAFE SETTINGS
           </h2>
           <p className="text-xs text-french-cream/80 mt-1 max-w-xl">
+<<<<<<< HEAD
             Configure cafe brand details, 7-day operating schedule, fulfillment toggles, delivery logistics, and payment rules.
+=======
+            Configure cafe brand details, 7-day operating schedule, fulfillment toggles, and delivery logistics rules.
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
           </p>
         </div>
 
@@ -160,7 +181,10 @@ export default function CafeSettingsManager({ initialTab = 'cafe-info' }) {
           { id: 'cafe-info', label: 'Cafe Information', icon: Store },
           { id: 'business-hours', label: 'Business Hours', icon: Clock },
           { id: 'order-settings', label: 'Order Settings', icon: ShoppingBag },
+<<<<<<< HEAD
           { id: 'payment-settings', label: 'Payment Settings', icon: CreditCard },
+=======
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
           { id: 'delivery-settings', label: 'Delivery Settings', icon: Bike }
         ].map(tab => {
           const Icon = tab.icon;
@@ -381,6 +405,7 @@ export default function CafeSettingsManager({ initialTab = 'cafe-info' }) {
           </div>
         )}
 
+<<<<<<< HEAD
         {/* 4. PAYMENT SETTINGS */}
         {activeSubTab === 'payment-settings' && (
           <div className="bg-french-card p-6 rounded-3xl border border-french-gold/30 shadow-lg space-y-4">
@@ -464,6 +489,9 @@ export default function CafeSettingsManager({ initialTab = 'cafe-info' }) {
         )}
 
         {/* 5. DELIVERY SETTINGS */}
+=======
+        {/* 4. DELIVERY SETTINGS */}
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
         {activeSubTab === 'delivery-settings' && (
           <div className="bg-french-card p-6 rounded-3xl border border-french-gold/30 shadow-lg space-y-4">
             <h3 className="font-serif font-bold text-lg text-french-dark border-b border-french-gold/20 pb-2">

@@ -35,11 +35,20 @@ export default function AuthModal({ onClose }) {
   const [phone, setPhone] = useState('');
   const [name, setName] = useState('');
   const [whatsappOptIn, setWhatsappOptIn] = useState(true);
+<<<<<<< HEAD
   const [otp, setOtp] = useState(['', '', '', '']); // 4-digit SMS OTP
   const [countdown, setCountdown] = useState(60);
 
   // Admin state
   const [adminEmail, setAdminEmail] = useState('');
+=======
+  const [otp, setOtp] = useState(['', '', '', '']); // 4-digit OTP
+  const [simulatedSmsOtp, setSimulatedSmsOtp] = useState('');
+  const [countdown, setCountdown] = useState(30);
+
+  // Admin state
+  const [adminEmail, setAdminEmail] = useState('manager@frenchbellcafe.com');
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
   const [adminPassword, setAdminPassword] = useState('');
   const [resetToken, setResetToken] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -67,20 +76,35 @@ export default function AuthModal({ onClose }) {
 
     const cleanPhone = phone.replace(/\D/g, '').slice(-10);
     if (!cleanPhone || cleanPhone.length !== 10) {
+<<<<<<< HEAD
       setError('Please enter a valid 10-digit mobile number.');
+=======
+      setError('Please enter a valid mobile number.');
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
       return;
     }
 
     try {
+<<<<<<< HEAD
       const res = await sendOtp(cleanPhone);
       setView('customer_otp');
       setCountdown(res?.cooldownSeconds || 60);
+=======
+      const generatedCode = await sendOtp(cleanPhone);
+      setSimulatedSmsOtp(generatedCode);
+      setView('customer_otp');
+      setCountdown(30);
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
       setOtp(['', '', '', '']);
       setTimeout(() => {
         if (otpInputsRef.current[0]) otpInputsRef.current[0].focus();
       }, 150);
     } catch (err) {
+<<<<<<< HEAD
       setError(err.message || 'Failed to send OTP. Please check provider settings.');
+=======
+      setError(err.message || 'Failed to send OTP. Please try again.');
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
     }
   };
 
@@ -138,8 +162,13 @@ export default function AuthModal({ onClose }) {
   const submitVerification = async (enteredOtp) => {
     setError('');
     const fullOtp = enteredOtp || otp.join('');
+<<<<<<< HEAD
     if (fullOtp.length < 4) {
       setError('Please enter the complete 4-digit verification code.');
+=======
+    if (fullOtp.length !== 4) {
+      setError('Please enter the complete 4-digit OTP');
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
       return;
     }
 
@@ -149,7 +178,11 @@ export default function AuthModal({ onClose }) {
       addNotification('Welcome to FrenchBell Cafe', `Logged in as ${displayName}`, 'success');
       if (onClose) onClose();
     } catch (err) {
+<<<<<<< HEAD
       setError(err.message || 'The verification code is incorrect. Please try again.');
+=======
+      setError(err.message || 'The OTP is incorrect. Please try again.');
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
     }
   };
 
@@ -335,7 +368,11 @@ export default function AuthModal({ onClose }) {
                 disabled={loading || phone.length < 10}
                 className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-french-gold via-french-gold-hover to-[#C09C2E] text-french-dark font-extrabold text-sm uppercase tracking-wider shadow-lg hover:scale-[1.02] active:scale-[0.99] transition-all disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-2 gold-glow"
               >
+<<<<<<< HEAD
                 <span>{loading ? 'Sending Code...' : 'Get Verification Code'}</span>
+=======
+                <span>{loading ? 'Sending Code...' : 'Get 4-Digit OTP'}</span>
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
                 <ArrowRight className="w-4 h-4" />
               </button>
 
@@ -355,9 +392,40 @@ export default function AuthModal({ onClose }) {
           {/* VIEW 2: 4-DIGIT OTP VERIFICATION */}
           {view === 'customer_otp' && (
             <div className="space-y-5">
+<<<<<<< HEAD
               <div className="text-center">
                 <p className="text-xs text-french-muted">
                   Enter 4-digit SMS verification code sent to <strong className="text-french-dark font-mono">+91 {phone}</strong>
+=======
+              {/* Simulated SMS Alert Banner in development */}
+              {simulatedSmsOtp && (
+                <div
+                  onClick={() => {
+                    const digits = simulatedSmsOtp.split('');
+                    setOtp(digits);
+                    submitVerification(simulatedSmsOtp);
+                  }}
+                  className="p-3.5 rounded-2xl bg-french-dark text-french-cream border border-french-gold/40 shadow-lg cursor-pointer hover:border-french-gold transition-all"
+                >
+                  <div className="flex items-center justify-between text-xs text-french-gold font-bold mb-1">
+                    <span className="flex items-center gap-1.5">
+                      <MessageSquare className="w-3.5 h-3.5" />
+                      <span>SMS CODE SIMULATOR</span>
+                    </span>
+                    <span className="text-[10px] bg-french-gold/20 px-2 py-0.5 rounded-full font-sans">
+                      Tap to Autofill
+                    </span>
+                  </div>
+                  <p className="text-xs text-french-cream/90 font-mono">
+                    "FrenchBell verification code is <strong className="text-french-gold font-black text-sm">{simulatedSmsOtp}</strong>. Valid for 5 mins."
+                  </p>
+                </div>
+              )}
+
+              <div className="text-center">
+                <p className="text-xs text-french-muted">
+                  Enter 4-digit code sent to <strong className="text-french-dark font-mono">+91 {phone}</strong>
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
                 </p>
                 <button
                   onClick={() => { setView('customer_phone'); setError(''); }}
@@ -368,7 +436,11 @@ export default function AuthModal({ onClose }) {
               </div>
 
               {/* 4 Individual Pin Inputs */}
+<<<<<<< HEAD
               <div className="flex justify-center items-center gap-2 sm:gap-3" onPaste={handleOtpPaste}>
+=======
+              <div className="flex justify-center items-center gap-3 sm:gap-4" onPaste={handleOtpPaste}>
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
                 {[0, 1, 2, 3].map((idx) => (
                   <input
                     key={idx}
@@ -379,7 +451,11 @@ export default function AuthModal({ onClose }) {
                     value={otp[idx]}
                     onChange={(e) => handleOtpChange(idx, e.target.value)}
                     onKeyDown={(e) => handleOtpKeyDown(idx, e)}
+<<<<<<< HEAD
                     className="w-10 h-13 sm:w-12 sm:h-14 text-center font-mono font-black text-xl sm:text-2xl rounded-xl border-2 border-french-gold/40 bg-french-cream text-french-dark focus:border-french-gold focus:ring-2 focus:ring-french-gold/20 focus:outline-none shadow-md transition-all"
+=======
+                    className="w-13 h-15 sm:w-14 sm:h-16 text-center font-mono font-black text-2xl sm:text-3xl rounded-2xl border-2 border-french-gold/40 bg-french-cream text-french-dark focus:border-french-gold focus:ring-2 focus:ring-french-gold/20 focus:outline-none shadow-md transition-all"
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
                   />
                 ))}
               </div>

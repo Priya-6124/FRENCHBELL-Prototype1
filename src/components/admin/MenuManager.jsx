@@ -408,6 +408,7 @@ export default function MenuManager({ initialTab = 'all' }) {
                     <tr key={item.id} className="hover:bg-french-cream/50 transition-colors">
                       <td className="p-3.5 flex items-center gap-3">
                         <div className="w-10 h-10 rounded-xl overflow-hidden border border-french-gold/30 shrink-0">
+<<<<<<< HEAD
                           <img
                             src={item.image_url}
                             alt={item.name}
@@ -417,6 +418,9 @@ export default function MenuManager({ initialTab = 'all' }) {
                               e.currentTarget.src = '/assets/logo.jfif';
                             }}
                           />
+=======
+                          <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
                         </div>
                         <div>
                           <span className="font-bold text-sm block">{item.name}</span>
@@ -563,10 +567,13 @@ export default function MenuManager({ initialTab = 'all' }) {
                             src={item.image_url}
                             alt={item.name}
                             className="w-full h-full object-cover"
+<<<<<<< HEAD
                             onError={(e) => {
                               e.currentTarget.onerror = null;
                               e.currentTarget.src = '/assets/logo.jfif';
                             }}
+=======
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
                           />
                         </div>
                       </td>
@@ -804,6 +811,7 @@ export default function MenuManager({ initialTab = 'all' }) {
 
                 <div className="flex items-center gap-4 p-3 rounded-2xl bg-french-cream border border-french-gold/30">
                   <div className="w-16 h-16 rounded-xl overflow-hidden border border-french-gold/40 shrink-0">
+<<<<<<< HEAD
                     <img
                       src={form.image_url}
                       alt="Preview"
@@ -813,6 +821,9 @@ export default function MenuManager({ initialTab = 'all' }) {
                         e.currentTarget.src = '/assets/logo.jfif';
                       }}
                     />
+=======
+                    <img src={form.image_url} alt="Preview" className="w-full h-full object-cover" />
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
                   </div>
                   <div className="flex-1 space-y-1">
                     <input

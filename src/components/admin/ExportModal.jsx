@@ -10,6 +10,7 @@ export default function ExportModal({ onClose }) {
   const [format, setFormat] = useState('excel'); // 'excel' | 'csv'
   const [generating, setGenerating] = useState(false);
 
+<<<<<<< HEAD
   const handleGenerateReport = async (e) => {
     e.preventDefault();
     setGenerating(true);
@@ -29,12 +30,21 @@ export default function ExportModal({ onClose }) {
         if (timeRange === '3m') return daysDiff <= 90;
         return true;
       });
+=======
+  const handleGenerateReport = (e) => {
+    e.preventDefault();
+    setGenerating(true);
+
+    setTimeout(() => {
+      setGenerating(false);
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
 
       let columns = [];
       let rows = [];
       let filename = `FrenchBell_${reportType}_Report_${timeRange}`;
 
       if (reportType === 'sales') {
+<<<<<<< HEAD
         const salesByDate = {};
         filteredOrders.filter(o => o.order_status !== 'cancelled').forEach(o => {
           const date = (o.created_at || '').slice(0, 10);
@@ -69,6 +79,41 @@ export default function ExportModal({ onClose }) {
         if (rows.length === 0) {
           rows = [{ date: 'No records', orders: 0, gross: 0, discounts: 0, delivery: 0, total: 0, aov: 0 }];
         }
+=======
+        columns = [
+          { header: 'Date', key: 'date', width: 120 },
+          { header: 'Completed Orders', key: 'orders', width: 130 },
+          { header: 'Gross Sales (₹)', key: 'gross_sales', width: 130, isCurrency: true },
+          { header: 'Discounts Availed (₹)', key: 'discounts', width: 150, isCurrency: true },
+          { header: 'Delivery Fees (₹)', key: 'delivery_fees', width: 130, isCurrency: true },
+          { header: 'Taxes GST (₹)', key: 'gst', width: 110, isCurrency: true },
+          { header: 'Net Cafe Revenue (₹)', key: 'net_revenue', width: 160, isCurrency: true },
+          { header: 'Avg Order Value (₹)', key: 'aov', width: 140, isCurrency: true }
+        ];
+
+        // 7 days of realistic financial data
+        const dates = [
+          '2026-10-05', '2026-10-04', '2026-10-03', '2026-10-02', '2026-10-01', '2026-09-30', '2026-09-29'
+        ];
+        rows = dates.map((d, idx) => {
+          const ord = 35 + Math.floor(Math.sin(idx) * 10) + idx * 2;
+          const gross = ord * 340;
+          const disc = Math.round(gross * 0.08);
+          const del = Math.round(ord * 0.4 * 25);
+          const gst = Math.round((gross - disc) * 0.05);
+          const net = gross - disc + del + gst;
+          return {
+            date: d,
+            orders: ord,
+            gross_sales: gross,
+            discounts: disc,
+            delivery_fees: del,
+            gst: gst,
+            net_revenue: net,
+            aov: Math.round(net / ord)
+          };
+        });
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
       } else if (reportType === 'products') {
         columns = [
           { header: 'Dish ID', key: 'id', width: 80 },
@@ -76,6 +121,7 @@ export default function ExportModal({ onClose }) {
           { header: 'Category', key: 'category', width: 130 },
           { header: 'Dietary', key: 'veg_type', width: 90 },
           { header: 'Unit Price (₹)', key: 'price', width: 110, isCurrency: true },
+<<<<<<< HEAD
           { header: 'Stock Left', key: 'stock_quantity', width: 110 },
           { header: 'Status', key: 'status', width: 120 }
         ];
@@ -89,20 +135,47 @@ export default function ExportModal({ onClose }) {
           stock_quantity: m.stock_quantity ?? 20,
           status: (m.available === 0 || m.stock_quantity <= 0) ? 'OUT OF STOCK' : 'AVAILABLE'
         }));
+=======
+          { header: 'Units Sold (30D)', key: 'units_sold', width: 130 },
+          { header: 'Total Revenue (₹)', key: 'revenue', width: 140, isCurrency: true },
+          { header: 'Popularity Score', key: 'popular', width: 120 },
+          { header: 'Status', key: 'status', width: 110 }
+        ];
+
+        rows = (menuItems || []).map((m, idx) => {
+          const units = 40 + ((idx * 17 + 23) % 110);
+          return {
+            id: m.id,
+            name: m.name,
+            category: m.category_slug || m.category_name || 'Cafe',
+            veg_type: (m.veg_type || 'veg').toUpperCase(),
+            price: m.price,
+            units_sold: units,
+            revenue: units * m.price,
+            popular: m.popular ? 'High Star' : 'Standard',
+            status: m.available !== 0 ? 'AVAILABLE' : 'SOLD OUT'
+          };
+        });
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
       } else {
         // Orders & Invoices
         columns = [
           { header: 'Order ID', key: 'order_number', width: 110 },
           { header: 'Customer', key: 'customer', width: 160 },
+<<<<<<< HEAD
           { header: 'Phone', key: 'phone', width: 130 },
           { header: 'Type', key: 'type', width: 110 },
           { header: 'Subtotal (₹)', key: 'subtotal', width: 110, isCurrency: true },
           { header: 'Discount (₹)', key: 'discount', width: 110, isCurrency: true },
           { header: 'Delivery Charge (₹)', key: 'delivery_charge', width: 130, isCurrency: true },
+=======
+          { header: 'Type', key: 'type', width: 110 },
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
           { header: 'Total Paid (₹)', key: 'total', width: 130, isCurrency: true },
           { header: 'Payment Method', key: 'payment', width: 130 },
           { header: 'Kitchen Status', key: 'status', width: 120 }
         ];
+<<<<<<< HEAD
 
         rows = filteredOrders.map(o => ({
           order_number: o.order_number,
@@ -120,6 +193,15 @@ export default function ExportModal({ onClose }) {
         if (rows.length === 0) {
           rows = [{ order_number: 'N/A', customer: 'No orders found', phone: '', type: '', subtotal: 0, discount: 0, delivery_charge: 0, total: 0, payment: '', status: '' }];
         }
+=======
+        rows = [
+          { order_number: 'FB001', customer: 'Priya Sundaram', type: 'DELIVERY', total: 241, payment: 'UPI_GPAY', status: 'COMPLETED' },
+          { order_number: 'FB002', customer: 'Amit Patel', type: 'DINE-IN (T-04)', total: 358, payment: 'UPI_PHONEPE', status: 'COMPLETED' },
+          { order_number: 'FB003', customer: 'Sara Khan', type: 'TAKEAWAY', total: 188, payment: 'CARD', status: 'COMPLETED' },
+          { order_number: 'FB004', customer: 'Vikram Singh', type: 'DELIVERY', total: 398, payment: 'UPI_PAYTM', status: 'COMPLETED' },
+          { order_number: 'FB005', customer: 'Deepak Rao', type: 'DELIVERY', total: 320, payment: 'UPI', status: 'COMPLETED' }
+        ];
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
       }
 
       if (format === 'excel') {
@@ -128,6 +210,7 @@ export default function ExportModal({ onClose }) {
         exportToCsv(filename, columns, rows);
       }
 
+<<<<<<< HEAD
       addNotification('Report Exported', `${reportType.toUpperCase()} report generated & downloaded from live database records as ${format === 'excel' ? 'Excel (.xls)' : 'CSV'}!`, 'success');
       if (onClose) onClose();
     } catch (err) {
@@ -135,6 +218,11 @@ export default function ExportModal({ onClose }) {
     } finally {
       setGenerating(false);
     }
+=======
+      addNotification('Report Exported', `${reportType.toUpperCase()} report generated & downloaded as ${format === 'excel' ? 'Excel (.xls)' : 'CSV'}!`, 'success');
+      if (onClose) onClose();
+    }, 700);
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
   };
 
   return (

@@ -30,12 +30,21 @@ export default function AnalyticsDashboard({ initialTab = 'overview' }) {
   }, [initialTab]);
 
   const [summary, setSummary] = useState({
+<<<<<<< HEAD
     today_revenue: 0,
     total_orders: 0,
     pending_orders: 0,
     completed_orders: 0,
     active_customers: 0,
     average_order_value: 0
+=======
+    today_revenue: 14890,
+    total_orders: 42,
+    pending_orders: 3,
+    completed_orders: 39,
+    active_customers: 28,
+    average_order_value: 354
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
   });
 
   useEffect(() => {
@@ -57,18 +66,29 @@ export default function AnalyticsDashboard({ initialTab = 'overview' }) {
     ];
 
     const rows = [
+<<<<<<< HEAD
       { metric: 'Today Gross Sales Revenue', value: summary.today_revenue, period: 'Today', status: 'Real Database Metric' },
       { metric: 'Total Paid Customer Orders', value: summary.total_orders, period: 'Today', status: 'Live Orders' },
       { metric: 'Average Order Value (AOV)', value: summary.average_order_value, period: 'Per Ticket (₹)', status: 'Live Computation' },
       { metric: 'Completed Deliveries', value: summary.completed_orders, period: 'Doorstep + Takeaway', status: 'Fulfilled' },
       { metric: 'Active Repeat Foodies', value: summary.active_customers, period: 'Unique Mobile Numbers', status: 'Customer Count' },
       { metric: 'Direct UPI Settlements', value: Math.round(summary.today_revenue * 0.74), period: 'Settlements', status: 'Settled' }
+=======
+      { metric: 'Today Gross Sales Revenue', value: summary.today_revenue, period: 'Shift (11 AM - 11:30 PM)', status: '+14.2% Above Target' },
+      { metric: 'Total Paid Customer Orders', value: summary.total_orders, period: 'Today', status: 'Healthy Volume' },
+      { metric: 'Average Order Value (AOV)', value: summary.average_order_value, period: 'Per Ticket (₹)', status: 'Optimal Basket Size' },
+      { metric: 'Completed Deliveries', value: summary.completed_orders, period: 'Doorstep + Takeaway', status: '98.2% On-time' },
+      { metric: 'Active Repeat Foodies', value: summary.active_customers, period: 'Unique Mobile Numbers', status: '62% Retention' },
+      { metric: 'Average Kitchen Prep Time', value: 14.5, period: 'Minutes', status: 'Below 18m Target' },
+      { metric: 'Direct UPI Settlements', value: Math.round(summary.today_revenue * 0.74), period: 'GPay, PhonePe, Paytm', status: 'Instant Settlement' }
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
     ];
 
     exportToExcel(`FrenchBell_Operations_Analytics_${timeFilter}`, 'Business Summary', columns, rows);
     addNotification('Excel Exported', 'Operations Analytics sheet downloaded (.xls)!', 'success');
   };
 
+<<<<<<< HEAD
   // Top selling dishes calculated dynamically from real summary data
   const topDishes = (summary.popular_items && summary.popular_items.length > 0)
     ? summary.popular_items.map((item) => ({
@@ -83,6 +103,20 @@ export default function AnalyticsDashboard({ initialTab = 'overview' }) {
         orders: 0,
         revenue: 0
       }));
+=======
+  // Top selling dishes calculated dynamically from menuItems
+  const topDishes = (menuItems || []).slice(0, 5).map((m, idx) => {
+    const ordersCount = 142 - (idx * 21);
+    const revenue = ordersCount * m.price;
+    return {
+      name: m.name,
+      category: m.category_slug || 'Cafe',
+      orders: ordersCount,
+      revenue,
+      rating: (4.7 + (idx === 0 ? 0.2 : -0.1 * idx)).toFixed(1)
+    };
+  });
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
 
   return (
     <div className="space-y-6">

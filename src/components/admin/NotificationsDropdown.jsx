@@ -25,7 +25,11 @@ export default function NotificationsDropdown({ onNavigateTab }) {
       if (res.ok) {
         const data = await res.json();
         setNotifications(data.notifications || []);
+<<<<<<< HEAD
         setUnreadCount(data.unreadCount ?? data.unread_count ?? 0);
+=======
+        setUnreadCount(data.unread_count || 0);
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
       }
     } catch (err) {
       // Non-blocking fallback
@@ -56,10 +60,17 @@ export default function NotificationsDropdown({ onNavigateTab }) {
     if (e) e.stopPropagation();
     try {
       await fetch(`/api/admin/notifications/${id}/read`, {
+<<<<<<< HEAD
         method: 'PUT',
         headers: token ? { 'Authorization': `Bearer ${token}` } : {}
       });
       setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true, read: 1 } : n));
+=======
+        method: 'PATCH',
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      });
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
       setUnreadCount(prev => Math.max(0, prev - 1));
     } catch (err) {}
   };
@@ -69,10 +80,17 @@ export default function NotificationsDropdown({ onNavigateTab }) {
     setLoading(true);
     try {
       await fetch('/api/admin/notifications/read-all', {
+<<<<<<< HEAD
         method: 'PUT',
         headers: token ? { 'Authorization': `Bearer ${token}` } : {}
       });
       setNotifications(prev => prev.map(n => ({ ...n, is_read: true, read: 1 })));
+=======
+        method: 'PATCH',
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      });
+      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
       setUnreadCount(0);
       addNotification('Notifications', 'All marked as read', 'info');
     } catch (err) {} finally {

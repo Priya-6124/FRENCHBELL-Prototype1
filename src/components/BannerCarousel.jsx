@@ -9,6 +9,7 @@ export default function BannerCarousel({ banners = [], onExploreClick }) {
   const touchStartX = useRef(0);
   const touchEndX = useRef(0);
 
+<<<<<<< HEAD
   // Show only active advertisements within valid date range
   const now = new Date();
   const activeBanners = (banners || []).filter(b => {
@@ -19,6 +20,10 @@ export default function BannerCarousel({ banners = [], onExploreClick }) {
   });
 
   const displayBanners = activeBanners.length > 0 ? activeBanners : [
+=======
+  // Fallback banners if admin has not uploaded any
+  const displayBanners = banners && banners.length > 0 ? banners : [
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
     {
       id: 1,
       type: 'Weekend Offer',
@@ -113,10 +118,13 @@ export default function BannerCarousel({ banners = [], onExploreClick }) {
               alt={currentBanner.title}
               className="w-full h-full object-cover"
               loading="lazy"
+<<<<<<< HEAD
               onError={(e) => {
                 e.currentTarget.onerror = null;
                 e.currentTarget.src = 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=1200&q=80';
               }}
+=======
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
             />
             <div className="absolute inset-0 bg-gradient-to-r from-french-dark/95 via-french-dark/70 to-transparent" />
             <div className="absolute inset-0 bg-gradient-to-t from-french-dark/80 via-transparent to-transparent" />

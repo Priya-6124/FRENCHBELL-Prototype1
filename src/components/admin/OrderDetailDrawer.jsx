@@ -68,12 +68,19 @@ export default function OrderDetailDrawer({ order, onClose, onStatusUpdated }) {
       const data = await res.json();
       if (data.whatsapp_link) {
         window.open(data.whatsapp_link, '_blank');
+<<<<<<< HEAD
         addNotification('WhatsApp Chat Opened', `Opened WhatsApp composer for ${data.phone ? '+' + data.phone : 'customer'}`, 'info');
       } else {
         throw new Error(data.error || 'Failed to generate link');
       }
     } catch (err) {
       addNotification('Error', err.message || 'Failed to generate WhatsApp receipt', 'error');
+=======
+      }
+      addNotification('WhatsApp Receipt', 'Dispatched receipt link via WhatsApp!', 'success');
+    } catch (err) {
+      addNotification('Error', 'Failed to generate WhatsApp receipt', 'error');
+>>>>>>> 1db65623a1a40f9abb4889af2d5c43f7d748873d
     }
   };
 
