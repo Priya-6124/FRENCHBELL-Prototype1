@@ -9,7 +9,10 @@
     "build": "vite build",
     "preview": "vite preview",
     "server": "node --no-deprecation server/index.js",
-    "seed": "node --no-deprecation server/seed.js"
+    "seed": "node --no-deprecation server/seed.js",
+    "migrate": "node --no-deprecation server/db/migrate.js",
+    "import-json": "node --no-deprecation server/db/importJson.js",
+    "test": "node --no-deprecation scripts/test-suite.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -21,6 +24,7 @@
     "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.395.0",
     "multer": "^1.4.5-lts.1",
+    "pg": "^8.23.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "recharts": "^2.12.7"
@@ -32,6 +36,7 @@
     "@vitejs/plugin-react": "^4.3.0",
     "autoprefixer": "^10.4.19",
     "concurrently": "^8.2.2",
+    "pg-mem": "^3.0.14",
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.4",
     "vite": "^5.2.13"

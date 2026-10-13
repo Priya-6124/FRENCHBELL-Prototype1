@@ -27,6 +27,7 @@ import NotificationsToast from './components/NotificationsToast';
 
 // Admin Operations System
 import AdminDashboard from './components/admin/AdminDashboard';
+import AcceptInvitationView from './components/admin/AcceptInvitationView';
 import { Bell, Clock, Bike, UtensilsCrossed } from 'lucide-react';
 
 function MainSiteContent() {
@@ -40,6 +41,31 @@ function MainSiteContent() {
     setActiveOrder
   } = useApp();
   const { user } = useAuth();
+
+  const [isAcceptInviteView, setIsAcceptInviteView] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('view') === 'accept-invitation';
+  });
+
+  // Dedicated Accept Invitation Page
+  if (isAcceptInviteView) {
+    return (
+      <AcceptInvitationView
+        onGoToLogin={() => {
+          setIsAcceptInviteView(false);
+          setShowSplash(false);
+          setCurrentView('admin');
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }}
+        onGoToSite={() => {
+          setIsAcceptInviteView(false);
+          setShowSplash(false);
+          setCurrentView('home');
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }}
+      />
+    );
+  }
 
   const handleOrderPlaced = (order) => {
     setActiveOrder(order);

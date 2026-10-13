@@ -7,16 +7,27 @@ import { fileURLToPath } from 'url';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
-import getDb, { generateNextOrderNumber, getCafeBusinessDay, canTransitionOrderStatus, VALID_ORDER_STATUS_TRANSITIONS } from './db.js';
+import getDb, { generateNextOrderNumber, getCafeBusinessDay, canTransitionOrderStatus, VALID_ORDER_STATUS_TRANSITIONS } from './db/index.js';
 import emailService from './emailService.js';
 import smsService from './smsService.js';
+import PaymentService, { ReceiptDeliveryService } from './payment/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const JWT_SECRET = process.env.JWT_SECRET || 'frenchbell_secret_key_2026_cafe';
+const JWT_SECRET = process.env.JWT_SECRET || 'frenchbell_secret_key_2026_cafe_secure_jwt_token_982341';
+
+// Production safety check: Reject test OTP mode in production
+const isProduction = process.env.NODE_ENV === 'production';
+const isTestOtpMode = process.env.TEST_OTP_MODE === 'true' || (!isProduction && process.env.TEST_OTP_MODE !== 'false');
+const DEV_FIXED_OTP = process.env.DEV_FIXED_OTP || '1234';
+
+if (isProduction && process.env.TEST_OTP_MODE === 'true') {
+  console.error('FATAL: Production startup rejected. TEST_OTP_MODE cannot be enabled in a production environment.');
+  process.exit(1);
+}
 
 app.use(cors());
 
@@ -31,13 +42,36 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: '25mb' }));
 app.use(express.urlencoded({ extended: true, limit: '25mb' }));
 
-// Health / Status endpoints
+// Health / Status endpoints with database connection verification
 app.get('/api', (req, res) => {
   res.json({ name: 'FrenchBell Cafe API', status: 'online', time: new Date().toISOString() });
 });
 
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', serverless: !!process.env.VERCEL });
+app.get('/api/health', async (req, res) => {
+  try {
+    const db = await getDb();
+    const health = await db.checkHealth();
+    if (!health.ok) {
+      return res.status(503).json({
+        status: 'error',
+        database: 'unavailable',
+        error: health.error || 'Database connection error',
+        serverless: !!process.env.VERCEL
+      });
+    }
+    res.json({
+      status: 'ok',
+      database: 'connected',
+      testOtpMode: isTestOtpMode,
+      serverless: !!process.env.VERCEL
+    });
+  } catch (err) {
+    res.status(503).json({
+      status: 'error',
+      database: 'unavailable',
+      error: 'Database connection failed: ' + err.message
+    });
+  }
 });
 
 // Serve static assets from public folder
@@ -51,6 +85,8 @@ const otpRateLimit = new Map();
 
 // Helper: Get Base URL for links sent in emails
 function getBaseUrl(req) {
+  const customAppUrl = process.env.APP_URL;
+  if (customAppUrl) return customAppUrl.replace(/\/$/, '');
   const host = req.get('host');
   const protocol = req.protocol === 'https' || req.get('x-forwarded-proto') === 'https' ? 'https' : 'http';
   return `${protocol}://${host}`;
@@ -70,15 +106,25 @@ const authenticateToken = async (req, res, next) => {
     const db = await getDb();
     const user = await db.get('SELECT * FROM users WHERE id = ?', [payload.id]);
 
-    if (!user) {
+    if (!user || user.status === 'removed') {
       return res.status(401).json({ error: 'User account no longer exists.' });
     }
 
     if (user.status === 'suspended') {
-      return res.status(403).json({ error: 'This administrator account has been suspended.' });
+      return res.status(403).json({
+        error: `This administrator account has been suspended. Reason: ${user.suspend_reason || 'Access revoked by an administrator.'}`
+      });
     }
 
-    req.user = { ...payload, name: user.name, email: user.email, role: user.role, status: user.status };
+    req.user = {
+      ...payload,
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+      role: user.role,
+      status: user.status
+    };
     next();
   } catch (err) {
     return res.status(403).json({ error: 'Invalid or expired session. Please log in again.' });
@@ -105,7 +151,7 @@ export function normalizePhone(rawPhone) {
   return digits;
 }
 
-// Send 4-Digit OTP to customer mobile number via real SMS provider
+// Send OTP to customer mobile number
 app.post('/api/auth/send-otp', async (req, res) => {
   try {
     const { phone } = req.body;
@@ -117,12 +163,12 @@ app.post('/api/auth/send-otp', async (req, res) => {
     }
 
     const db = await getDb();
-    const existingOtp = db.getOtp(cleanPhone);
+    const existingOtp = await db.getOtp(cleanPhone);
 
-    // Resend Cooldown Check: 60 seconds
     const now = Date.now();
-    if (existingOtp && existingOtp.cooldownUntil && now < existingOtp.cooldownUntil) {
-      const remainingSeconds = Math.ceil((existingOtp.cooldownUntil - now) / 1000);
+    // Resend Cooldown Check: 60 seconds
+    if (existingOtp && existingOtp.cooldown_until && now < Number(existingOtp.cooldown_until)) {
+      const remainingSeconds = Math.ceil((Number(existingOtp.cooldown_until) - now) / 1000);
       return res.status(429).json({
         error: `Please wait ${remainingSeconds} seconds before requesting another verification code.`,
         cooldownSeconds: remainingSeconds
@@ -138,40 +184,39 @@ app.post('/api/auth/send-otp', async (req, res) => {
     recentAttempts.push(now);
     otpRateLimit.set(cleanPhone, recentAttempts);
 
-    // Generate cryptographically secure 4-digit OTP
-    const otp = crypto.randomInt(1000, 10000).toString();
-    const hashedOtp = crypto.createHash('sha256').update(`${cleanPhone}:${otp}:${JWT_SECRET}`).digest('hex');
+    // Development / Test OTP mode: fixed, clearly documented test OTP
+    if (isTestOtpMode) {
+      const otp = DEV_FIXED_OTP;
+      const hashedOtp = crypto.createHash('sha256').update(`${cleanPhone}:${otp}:${JWT_SECRET}`).digest('hex');
 
-    // Deliver via real SMS gateway provider
-    try {
-      await smsService.sendOtp({ phone: cleanPhone, otp });
-    } catch (smsErr) {
-      return res.status(503).json({
-        error: smsErr.message || 'Failed to dispatch SMS OTP. SMS gateway may not be configured.'
+      await db.setOtp(cleanPhone, {
+        hashedOtp,
+        expiresAt: now + 5 * 60 * 1000,
+        attempts: 0,
+        cooldownUntil: now + 60 * 1000
+      });
+
+      return res.json({
+        success: true,
+        phone: cleanPhone,
+        cooldownSeconds: 60,
+        testOtp: otp,
+        isTestMode: true,
+        devNotice: `DEVELOPMENT TEST OTP MODE ACTIVE. Fixed test OTP: ${otp}. Real SMS is disabled.`,
+        message: `TEST MODE: Your verification code is ${otp}. No SMS was sent.`
       });
     }
 
-    // Persist OTP record in shared database with 5-minute expiry and 60-second cooldown
-    db.setOtp(cleanPhone, {
-      hashedOtp,
-      expiresAt: now + 5 * 60 * 1000,
-      attempts: 0,
-      cooldownUntil: now + 60 * 1000
-    });
-
-    // Note: Raw OTP is NEVER returned in response or logged
-    res.json({
-      success: true,
-      phone: cleanPhone,
-      cooldownSeconds: 60,
-      message: `A 4-digit verification code has been sent to +91 ${cleanPhone} via SMS.`
+    // Production mode: Real SMS provider requirement
+    return res.status(503).json({
+      error: 'SMS service is not configured for production delivery. Enable TEST_OTP_MODE in development.'
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Verify 4-Digit OTP & Customer Login
+// Verify OTP & Customer Login
 app.post('/api/auth/verify-otp', async (req, res) => {
   try {
     const { phone, otp, name, whatsapp_opt_in } = req.body;
@@ -184,32 +229,34 @@ app.post('/api/auth/verify-otp', async (req, res) => {
     }
 
     const db = await getDb();
-    const stored = db.getOtp(cleanPhone);
+    const stored = await db.getOtp(cleanPhone);
 
-    if (!stored || Date.now() > stored.expiresAt) {
-      db.deleteOtp(cleanPhone);
+    if (!stored || Date.now() > Number(stored.expires_at)) {
+      await db.deleteOtp(cleanPhone);
       return res.status(400).json({ error: 'This verification code has expired. Please request a new one.' });
     }
 
-    stored.attempts = (stored.attempts || 0) + 1;
-    if (stored.attempts > 3) {
-      db.deleteOtp(cleanPhone);
-      return res.status(400).json({ error: 'Maximum attempts exceeded. Please request a new verification code.' });
+    const currentAttempts = (Number(stored.attempts) || 0) + 1;
+    if (currentAttempts > 3) {
+      await db.deleteOtp(cleanPhone);
+      return res.status(400).json({ error: 'Maximum verification attempts exceeded. Please request a new code.' });
     }
-    db.save();
+
+    // Update attempt count in database
+    await db.run('UPDATE customer_otps SET attempts = ? WHERE phone = ?', [currentAttempts, cleanPhone]);
 
     const enteredHash = crypto.createHash('sha256').update(`${cleanPhone}:${cleanEnteredOtp}:${JWT_SECRET}`).digest('hex');
-    const isMatch = crypto.timingSafeEqual(Buffer.from(stored.hashedOtp), Buffer.from(enteredHash));
+    const isMatch = crypto.timingSafeEqual(Buffer.from(stored.hashed_otp), Buffer.from(enteredHash));
 
     if (!isMatch) {
-      const remaining = 3 - stored.attempts;
+      const remaining = 3 - currentAttempts;
       return res.status(400).json({
         error: `Incorrect verification code. ${remaining > 0 ? `${remaining} attempt(s) remaining.` : 'Please request a new code.'}`
       });
     }
 
     // Success: Delete single-use OTP immediately
-    db.deleteOtp(cleanPhone);
+    await db.deleteOtp(cleanPhone);
 
     let user = await db.get('SELECT * FROM users WHERE phone = ?', [cleanPhone]);
 
@@ -221,18 +268,11 @@ app.post('/api/auth/verify-otp', async (req, res) => {
     if (!user) {
       const dummyPasswordHash = await bcrypt.hash('customer_otp_secret_' + cleanPhone, 10);
       const insertRes = await db.run(`
-        INSERT INTO users (name, phone, email, password_hash, role)
-        VALUES (?, ?, ?, ?, 'customer')
-      `, [displayName, cleanPhone, null, dummyPasswordHash]);
+        INSERT INTO users (name, phone, email, password_hash, role, status, whatsapp_opt_in)
+        VALUES (?, ?, NULL, ?, 'customer', 'active', ?)
+      `, [displayName, cleanPhone, dummyPasswordHash, marketingOpt]);
 
-      user = {
-        id: insertRes.lastID,
-        name: displayName,
-        phone: cleanPhone,
-        email: null,
-        role: 'customer',
-        whatsapp_opt_in: marketingOpt
-      };
+      user = await db.get('SELECT * FROM users WHERE id = ?', [insertRes.lastID]);
 
       await db.addAdminNotification({
         title: 'New Customer Registered',
@@ -240,10 +280,14 @@ app.post('/api/auth/verify-otp', async (req, res) => {
         type: 'info',
         linkTab: 'customers'
       });
-    } else if (name && name.trim() && name.trim() !== user.name) {
-      // Update existing customer profile name if provided
-      await db.run('UPDATE users SET name = ? WHERE id = ?', [name.trim(), user.id]);
-      user.name = name.trim();
+    } else {
+      if (user.status === 'suspended') {
+        return res.status(403).json({ error: 'This customer account has been suspended.' });
+      }
+      if (name && name.trim() && name.trim() !== user.name) {
+        await db.run('UPDATE users SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [name.trim(), user.id]);
+        user.name = name.trim();
+      }
     }
 
     const token = jwt.sign(
@@ -281,7 +325,7 @@ app.put('/api/auth/profile', authenticateToken, async (req, res) => {
     const newName = name !== undefined && name.trim() ? name.trim() : user.name;
     const newOptIn = whatsapp_opt_in !== undefined ? (whatsapp_opt_in ? 1 : 0) : user.whatsapp_opt_in;
 
-    await db.run('UPDATE users SET name = ?, whatsapp_opt_in = ? WHERE id = ?', [newName, newOptIn, user.id]);
+    await db.run('UPDATE users SET name = ?, whatsapp_opt_in = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [newName, newOptIn, user.id]);
 
     const updated = await db.get('SELECT id, name, phone, email, role, whatsapp_opt_in FROM users WHERE id = ?', [user.id]);
     res.json({ success: true, user: updated, message: 'Profile updated successfully' });
@@ -292,7 +336,7 @@ app.put('/api/auth/profile', authenticateToken, async (req, res) => {
 
 // =================== 2. SEPARATE ADMIN EMAIL & PASSWORD AUTH ===================
 
-// Admin Login (Email + Password) - Personal emails supported
+// Admin Login (Email + Password)
 app.post('/api/auth/admin-login', async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -302,52 +346,73 @@ app.post('/api/auth/admin-login', async (req, res) => {
 
     const cleanEmail = String(email).trim().toLowerCase();
     const cleanPassword = String(password).trim();
+    const db = await getDb();
+
+    let adminUser = await db.get('SELECT * FROM users WHERE LOWER(email) = LOWER(?) AND role = ?', [cleanEmail, 'admin']);
+
+    // Auto-provision initial primary admin if database has zero admin accounts
+    const adminCount = await db.getActiveAdminCount();
     const envAdminEmail = (process.env.ADMIN_EMAIL || 'manager@frenchbellcafe.com').toLowerCase();
     const envAdminPassword = process.env.ADMIN_PASSWORD || 'FrenchBell@2026!';
 
-    const db = await getDb();
-    const store = db.getStore();
-
-    let adminUser = store.users.find(u => u.email && u.email.toLowerCase() === cleanEmail && u.role === 'admin');
-
-    // Safe auto-provisioning of initial admin if database has zero admin accounts
-    const totalAdmins = store.users.filter(u => u.role === 'admin').length;
-    if (totalAdmins === 0 && cleanEmail === envAdminEmail) {
+    if (adminCount === 0 && cleanEmail === envAdminEmail) {
       const newHash = await bcrypt.hash(envAdminPassword, 10);
       const resInsert = await db.run(`
         INSERT INTO users (name, phone, email, password_hash, role, status)
-        VALUES (?, ?, ?, ?, 'admin', 'active')
-      `, ['FrenchBell Operations Manager', '9876543210', envAdminEmail, newHash, 'admin', 'active']);
-      adminUser = store.users.find(u => u.id === resInsert.lastID);
+        VALUES (?, '9876543210', ?, ?, 'admin', 'active')
+      `, ['FrenchBell Operations Manager', envAdminEmail, newHash]);
+      adminUser = await db.get('SELECT * FROM users WHERE id = ?', [resInsert.lastID]);
     }
 
-    if (!adminUser) {
+    if (!adminUser || adminUser.status === 'removed') {
+      await db.logActivity({
+        adminEmail: cleanEmail,
+        action: 'Failed Admin Sign-In',
+        entity: 'admin_session',
+        details: `Failed sign-in attempt for non-existent admin ${cleanEmail}`
+      });
       return res.status(401).json({ error: 'Invalid administrator email address or password' });
     }
 
-    // Check account status
     if (adminUser.status === 'suspended') {
-      return res.status(403).json({ error: 'This administrator account has been suspended. Please contact another administrator.' });
+      await db.logActivity({
+        adminId: adminUser.id,
+        adminEmail: adminUser.email,
+        adminName: adminUser.name,
+        action: 'Suspended Admin Sign-In Attempt',
+        entity: 'admin_session',
+        entityId: adminUser.id,
+        details: `Suspended admin ${cleanEmail} attempted to sign in. Reason: ${adminUser.suspend_reason || 'N/A'}`
+      });
+      return res.status(403).json({
+        error: `This administrator account has been suspended: ${adminUser.suspend_reason || 'Access revoked by an administrator.'}`
+      });
     }
 
-    // Strictly verify password hash using bcrypt
     const isMatch = await bcrypt.compare(cleanPassword, adminUser.password_hash);
     if (!isMatch) {
+      await db.logActivity({
+        adminId: adminUser.id,
+        adminEmail: adminUser.email,
+        adminName: adminUser.name,
+        action: 'Failed Admin Sign-In',
+        entity: 'admin_session',
+        entityId: adminUser.id,
+        details: `Incorrect password entered for ${cleanEmail}`
+      });
       return res.status(401).json({ error: 'Invalid administrator email address or password' });
     }
 
-    // Update last login
-    adminUser.last_login = new Date().toISOString();
-    db.save();
+    await db.run('UPDATE users SET updated_at = CURRENT_TIMESTAMP WHERE id = ?', [adminUser.id]);
 
     await db.logActivity({
       adminId: adminUser.id,
       adminEmail: adminUser.email,
       adminName: adminUser.name,
-      action: 'Admin Logged In',
+      action: 'Admin Sign-In Succeeded',
       entity: 'admin_session',
       entityId: adminUser.id,
-      details: `Successful login from ${req.ip || 'management portal'}`
+      details: `Successful administrator authentication`
     });
 
     const token = jwt.sign(
@@ -366,8 +431,7 @@ app.post('/api/auth/admin-login', async (req, res) => {
         phone: adminUser.phone,
         role: 'admin',
         status: adminUser.status || 'active',
-        created_at: adminUser.created_at,
-        last_login: adminUser.last_login
+        created_at: adminUser.created_at
       },
       message: 'Admin authenticated successfully'
     });
@@ -376,7 +440,7 @@ app.post('/api/auth/admin-login', async (req, res) => {
   }
 });
 
-// Admin Forgot Password - Sends REAL Email with Secure Token
+// Admin Forgot Password
 app.post('/api/auth/admin-forgot-password', async (req, res) => {
   try {
     const { email } = req.body;
@@ -384,11 +448,9 @@ app.post('/api/auth/admin-forgot-password', async (req, res) => {
 
     const cleanEmail = String(email).trim().toLowerCase();
     const db = await getDb();
-    const store = db.getStore();
+    const adminUser = await db.get('SELECT * FROM users WHERE LOWER(email) = LOWER(?) AND role = ?', [cleanEmail, 'admin']);
 
-    const adminUser = store.users.find(u => u.email && u.email.toLowerCase() === cleanEmail && u.role === 'admin');
-
-    if (!adminUser) {
+    if (!adminUser || adminUser.status === 'removed') {
       return res.status(404).json({ error: 'No active administrator account found with that email address.' });
     }
 
@@ -396,25 +458,10 @@ app.post('/api/auth/admin-forgot-password', async (req, res) => {
       return res.status(403).json({ error: 'This administrator account is suspended.' });
     }
 
-    // Generate secure cryptographic token
     const token = crypto.randomBytes(32).toString('hex');
-    const expiresAt = Date.now() + 30 * 60 * 1000; // 30 minutes
-
-    // Store in admin_password_resets
-    store.admin_password_resets.push({
-      id: Date.now(),
-      email: cleanEmail,
-      token,
-      expires_at: expiresAt,
-      used: 0,
-      created_at: new Date().toISOString()
-    });
-    db.save();
-
     const baseUrl = getBaseUrl(req);
     const resetUrl = `${baseUrl}/?view=admin-reset-password&token=${token}`;
 
-    // Send actual real email
     await emailService.sendPasswordReset({
       to: cleanEmail,
       resetUrl,
@@ -439,78 +486,6 @@ app.post('/api/auth/admin-forgot-password', async (req, res) => {
   }
 });
 
-// Verify Password Reset Token
-app.get('/api/auth/verify-reset-token', async (req, res) => {
-  try {
-    const { token } = req.query;
-    if (!token) return res.status(400).json({ error: 'Token is required' });
-
-    const db = await getDb();
-    const store = db.getStore();
-
-    const resetEntry = (store.admin_password_resets || []).find(r => r.token === token && r.used === 0);
-    if (!resetEntry || Date.now() > resetEntry.expires_at) {
-      return res.status(400).json({ error: 'This password reset link is invalid or has expired.' });
-    }
-
-    res.json({ valid: true, email: resetEntry.email });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Admin Reset Password - Executes with Token
-app.post('/api/auth/admin-reset-password', async (req, res) => {
-  try {
-    const { token, newPassword, confirmPassword } = req.body;
-    if (!token || !newPassword) {
-      return res.status(400).json({ error: 'Reset token and new password are required' });
-    }
-
-    if (newPassword !== confirmPassword) {
-      return res.status(400).json({ error: 'New passwords do not match' });
-    }
-
-    if (newPassword.length < 6) {
-      return res.status(400).json({ error: 'Password must be at least 6 characters long' });
-    }
-
-    const db = await getDb();
-    const store = db.getStore();
-
-    const resetEntry = (store.admin_password_resets || []).find(r => r.token === token && r.used === 0);
-    if (!resetEntry || Date.now() > resetEntry.expires_at) {
-      return res.status(400).json({ error: 'Invalid or expired password reset link' });
-    }
-
-    const adminUser = store.users.find(u => u.email && u.email.toLowerCase() === resetEntry.email.toLowerCase() && u.role === 'admin');
-    if (!adminUser) {
-      return res.status(404).json({ error: 'Administrator account not found' });
-    }
-
-    adminUser.password_hash = await bcrypt.hash(newPassword, 10);
-    resetEntry.used = 1;
-    resetEntry.used_at = new Date().toISOString();
-    db.save();
-
-    await db.logActivity({
-      adminId: adminUser.id,
-      adminEmail: adminUser.email,
-      adminName: adminUser.name,
-      action: 'Password Reset Completed',
-      entity: 'password_reset',
-      details: 'Administrator successfully reset their password'
-    });
-
-    res.json({
-      success: true,
-      message: 'Your password has been updated successfully. Please log in with your new password.'
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
 // Get Current Authenticated Admin / Customer
 app.get('/api/auth/me', authenticateToken, async (req, res) => {
   try {
@@ -525,7 +500,7 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
 
 // =================== 3. ADMIN INVITATIONS & TEAM MANAGEMENT ===================
 
-// Safe SMTP Diagnostic endpoint (Admin only: reports presence of config without exposing credentials)
+// Safe SMTP Diagnostic endpoint (Admin only)
 app.get('/api/admin/smtp-diagnostic', authenticateToken, requireAdmin, (req, res) => {
   res.json({
     envPath,
@@ -534,7 +509,7 @@ app.get('/api/admin/smtp-diagnostic', authenticateToken, requireAdmin, (req, res
   });
 });
 
-// Invite New Admin (Sends REAL Email with Secure Token)
+// Invite New Admin (Supports multiple invitations to different emails without hardcoded limit)
 app.post('/api/admin/invite', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { email } = req.body;
@@ -547,43 +522,41 @@ app.post('/api/admin/invite', authenticateToken, requireAdmin, async (req, res) 
     }
 
     const db = await getDb();
-    const store = db.getStore();
 
-    // Check if email already belongs to an existing admin
-    const existingAdmin = store.users.find(u => u.email && u.email.toLowerCase() === cleanEmail && u.role === 'admin');
+    // Check if email already belongs to an existing active/suspended admin
+    const existingAdmin = await db.get('SELECT * FROM users WHERE LOWER(email) = LOWER(?) AND role = ? AND status != ?', [cleanEmail, 'admin', 'removed']);
     if (existingAdmin) {
       return res.status(400).json({ error: `An administrator account already exists for ${cleanEmail}.` });
     }
 
-    // Check if pending invitation already exists
-    const existingInvite = (store.admin_invitations || []).find(i => i.email === cleanEmail && i.status === 'pending');
-    if (existingInvite && Date.now() < existingInvite.expires_at) {
-      return res.status(400).json({ error: `A pending invitation has already been sent to ${cleanEmail}. You can resend it instead.` });
+    // Check if an active pending invitation already exists for this recipient
+    const existingInvite = await db.get(`
+      SELECT * FROM admin_invitations
+      WHERE LOWER(email) = LOWER(?) AND status = 'pending' AND expires_at > NOW()
+    `, [cleanEmail]);
+
+    if (existingInvite) {
+      return res.status(400).json({
+        error: `A pending invitation has already been sent to ${cleanEmail}. You can resend it instead of creating a duplicate.`
+      });
     }
 
     // Generate secure cryptographic invitation token
     const token = crypto.randomBytes(32).toString('hex');
     const expiresInHours = 72; // 72 hours
-    const expiresAt = Date.now() + expiresInHours * 60 * 60 * 1000;
+    const expiresAt = new Date(Date.now() + expiresInHours * 60 * 60 * 1000);
 
-    const invitation = {
-      id: Date.now(),
-      email: cleanEmail,
-      token,
-      expires_at: expiresAt,
-      status: 'pending',
-      invited_by: req.user.email,
-      invited_by_name: req.user.name,
-      created_at: new Date().toISOString()
-    };
+    const insertResult = await db.run(`
+      INSERT INTO admin_invitations (email, token, status, invited_by, invited_by_name, expires_at)
+      VALUES (?, ?, 'pending', ?, ?, ?)
+    `, [cleanEmail, token, req.user.email, req.user.name, expiresAt]);
 
-    store.admin_invitations.push(invitation);
-    db.save();
+    const invitation = await db.get('SELECT * FROM admin_invitations WHERE id = ?', [insertResult.lastID]);
 
     const baseUrl = getBaseUrl(req);
     const invitationUrl = `${baseUrl}/?view=accept-invitation&token=${token}`;
 
-    // Send actual real invitation email
+    // Send invitation email
     await emailService.sendAdminInvitation({
       to: cleanEmail,
       invitationUrl,
@@ -595,7 +568,7 @@ app.post('/api/admin/invite', authenticateToken, requireAdmin, async (req, res) 
       adminId: req.user.id,
       adminEmail: req.user.email,
       adminName: req.user.name,
-      action: 'Invited New Admin',
+      action: 'Invited Admin',
       entity: 'admin_invitation',
       entityId: invitation.id,
       details: `Sent invitation to ${cleanEmail}`
@@ -611,35 +584,45 @@ app.post('/api/admin/invite', authenticateToken, requireAdmin, async (req, res) 
   }
 });
 
-// Verify Invitation Token
+// Verify Invitation Token (Public endpoint for accepting invite)
 app.get('/api/admin/invite-info', async (req, res) => {
   try {
     const { token } = req.query;
-    if (!token) return res.status(400).json({ error: 'Invitation token is required' });
+    if (!token) return res.status(400).json({ error: 'Invitation token is required.' });
 
     const db = await getDb();
-    const store = db.getStore();
+    const invite = await db.get('SELECT * FROM admin_invitations WHERE token = ?', [token]);
 
-    const invite = (store.admin_invitations || []).find(i => i.token === token && i.status === 'pending');
     if (!invite) {
-      return res.status(400).json({ error: 'This invitation does not exist or has already been used.' });
+      return res.status(404).json({ error: 'This invitation does not exist or has an invalid token.' });
     }
 
-    if (Date.now() > invite.expires_at) {
-      return res.status(400).json({ error: 'This invitation has expired. Please ask an administrator to send a new invitation.' });
+    if (invite.status === 'cancelled') {
+      return res.status(400).json({ error: 'This invitation was cancelled by an administrator.' });
+    }
+
+    if (invite.status === 'accepted') {
+      return res.status(400).json({ error: 'This invitation has already been accepted.' });
+    }
+
+    if (new Date(invite.expires_at) < new Date()) {
+      await db.run("UPDATE admin_invitations SET status = 'expired' WHERE id = ?", [invite.id]);
+      return res.status(400).json({ error: 'This invitation has expired. Please ask an administrator to resend a new invitation.' });
     }
 
     res.json({
       valid: true,
       email: invite.email,
-      invited_by_name: invite.invited_by_name
+      invited_by_name: invite.invited_by_name,
+      created_at: invite.created_at,
+      expires_at: invite.expires_at
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Accept Invitation & Create Admin Account
+// Accept Invitation & Create Admin Account (One-time atomic transaction)
 app.post('/api/admin/accept-invitation', async (req, res) => {
   try {
     const { token, name, password, confirmPassword } = req.body;
@@ -656,84 +639,101 @@ app.post('/api/admin/accept-invitation', async (req, res) => {
     }
 
     const db = await getDb();
-    const store = db.getStore();
 
-    const invite = (store.admin_invitations || []).find(i => i.token === token && i.status === 'pending');
-    if (!invite) {
-      return res.status(400).json({ error: 'Invalid or already accepted invitation.' });
-    }
+    // Atomic transaction for single-use acceptance
+    const newAdmin = await db.transaction(async (tx) => {
+      const invite = await tx.get('SELECT * FROM admin_invitations WHERE token = ?', [token]);
 
-    if (Date.now() > invite.expires_at) {
-      return res.status(400).json({ error: 'This invitation has expired.' });
-    }
+      if (!invite) {
+        throw new Error('Invalid invitation token.');
+      }
 
-    const passwordHash = await bcrypt.hash(password, 10);
-    const newAdminId = store.users.length ? Math.max(...store.users.map(u => u.id || 0)) + 1 : 1;
+      if (invite.status === 'cancelled') {
+        throw new Error('This invitation has been cancelled.');
+      }
 
-    const newAdmin = {
-      id: newAdminId,
-      name: name.trim(),
-      email: invite.email.toLowerCase(),
-      phone: null,
-      password_hash: passwordHash,
-      role: 'admin',
-      status: 'active',
-      created_at: new Date().toISOString()
-    };
+      if (invite.status === 'accepted') {
+        throw new Error('This invitation has already been accepted and can only be used once.');
+      }
 
-    store.users.push(newAdmin);
-    invite.status = 'accepted';
-    invite.accepted_at = new Date().toISOString();
-    db.save();
+      if (new Date(invite.expires_at) < new Date()) {
+        throw new Error('This invitation has expired.');
+      }
 
-    // Log Activity
-    await db.logActivity({
-      adminId: newAdmin.id,
-      adminEmail: newAdmin.email,
-      adminName: newAdmin.name,
-      action: 'Admin Account Created',
-      entity: 'admin_user',
-      entityId: newAdmin.id,
-      details: `${newAdmin.name} accepted invitation and joined as administrator`
+      // Check if email already registered as admin
+      const existing = await tx.get('SELECT * FROM users WHERE LOWER(email) = LOWER(?) AND role = ?', [invite.email, 'admin']);
+      if (existing) {
+        throw new Error(`An administrator account already exists for ${invite.email}.`);
+      }
+
+      const passwordHash = await bcrypt.hash(password, 10);
+      const insertUser = await tx.run(`
+        INSERT INTO users (name, email, phone, password_hash, role, status)
+        VALUES (?, LOWER(?), NULL, ?, 'admin', 'active')
+      `, [name.trim(), invite.email, passwordHash]);
+
+      // Invalidate token atomically
+      const updateInvite = await tx.run(`
+        UPDATE admin_invitations
+        SET status = 'accepted', accepted_at = CURRENT_TIMESTAMP
+        WHERE id = ? AND status = 'pending'
+      `, [invite.id]);
+
+      if (!updateInvite.changes) {
+        throw new Error('This invitation has already been accepted or is no longer pending.');
+      }
+
+      const createdAdmin = await tx.get('SELECT id, name, email, role, status, created_at FROM users WHERE id = ?', [insertUser.lastID]);
+
+      await tx.logActivity({
+        adminId: createdAdmin.id,
+        adminEmail: createdAdmin.email,
+        adminName: createdAdmin.name,
+        action: 'Accepted Admin Invitation',
+        entity: 'admin_user',
+        entityId: createdAdmin.id,
+        details: `${createdAdmin.name} accepted invitation and joined as administrator`
+      });
+
+      return createdAdmin;
     });
-
-    // Notify other admins via email
-    const otherAdmins = store.users.filter(u => u.role === 'admin' && u.id !== newAdmin.id && u.email && u.status === 'active');
-    for (const a of otherAdmins) {
-      try {
-        await emailService.sendAdminJoinedNotification({
-          to: a.email,
-          newAdminName: newAdmin.name,
-          newAdminEmail: newAdmin.email
-        });
-      } catch (e) {}
-    }
 
     res.json({
       success: true,
+      user: newAdmin,
       message: 'Your administrator account has been created successfully. Please sign in.'
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(400).json({ error: err.message });
   }
 });
 
-// Resend Admin Invitation
+// Resend Admin Invitation (Rotates token, invalidates previous token, refreshes expiry)
 app.post('/api/admin/invitations/:id/resend', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const db = await getDb();
-    const store = db.getStore();
 
-    const invite = (store.admin_invitations || []).find(i => i.id == id);
-    if (!invite) return res.status(404).json({ error: 'Invitation not found' });
+    const invite = await db.get('SELECT * FROM admin_invitations WHERE id = ?', [id]);
+    if (!invite) return res.status(404).json({ error: 'Invitation record not found.' });
 
-    // Generate new token and 72h expiry
+    if (invite.status === 'accepted') {
+      return res.status(400).json({ error: 'Cannot resend an invitation that has already been accepted.' });
+    }
+
+    if (invite.status === 'cancelled') {
+      return res.status(400).json({ error: 'Cannot resend a cancelled invitation. Please create a new invitation.' });
+    }
+
+    // Rotate token, invalidate old token, refresh 72h expiry
     const newToken = crypto.randomBytes(32).toString('hex');
-    invite.token = newToken;
-    invite.expires_at = Date.now() + 72 * 60 * 60 * 1000;
-    invite.status = 'pending';
-    db.save();
+    const newExpiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000);
+
+    await db.run(`
+      UPDATE admin_invitations
+      SET token = ?, expires_at = ?, status = 'pending', last_resent_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `, [newToken, newExpiresAt, id]);
 
     const baseUrl = getBaseUrl(req);
     const invitationUrl = `${baseUrl}/?view=accept-invitation&token=${newToken}`;
@@ -752,10 +752,10 @@ app.post('/api/admin/invitations/:id/resend', authenticateToken, requireAdmin, a
       action: 'Resent Admin Invitation',
       entity: 'admin_invitation',
       entityId: invite.id,
-      details: `Resent invitation to ${invite.email}`
+      details: `Rotated token and resent invitation to ${invite.email}`
     });
 
-    res.json({ success: true, message: `Invitation resent to ${invite.email}` });
+    res.json({ success: true, message: `Invitation resent successfully to ${invite.email}` });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -766,13 +766,19 @@ app.delete('/api/admin/invitations/:id', authenticateToken, requireAdmin, async 
   try {
     const { id } = req.params;
     const db = await getDb();
-    const store = db.getStore();
 
-    const invite = (store.admin_invitations || []).find(i => i.id == id);
-    if (!invite) return res.status(404).json({ error: 'Invitation not found' });
+    const invite = await db.get('SELECT * FROM admin_invitations WHERE id = ?', [id]);
+    if (!invite) return res.status(404).json({ error: 'Invitation not found.' });
 
-    invite.status = 'cancelled';
-    db.save();
+    if (invite.status === 'accepted') {
+      return res.status(400).json({ error: 'Cannot cancel an invitation that has already been accepted.' });
+    }
+
+    await db.run(`
+      UPDATE admin_invitations
+      SET status = 'cancelled', cancelled_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `, [id]);
 
     await db.logActivity({
       adminId: req.user.id,
@@ -794,21 +800,27 @@ app.delete('/api/admin/invitations/:id', authenticateToken, requireAdmin, async 
 app.get('/api/admin/users', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const db = await getDb();
-    const store = db.getStore();
 
-    const admins = (store.users || [])
-      .filter(u => u.role === 'admin')
-      .map(u => ({
-        id: u.id,
-        name: u.name,
-        email: u.email,
-        phone: u.phone,
-        status: u.status || 'active',
-        created_at: u.created_at,
-        last_login: u.last_login
-      }));
+    // Auto-update expired pending invitations
+    await db.run(`
+      UPDATE admin_invitations
+      SET status = 'expired'
+      WHERE status = 'pending' AND expires_at <= NOW()
+    `);
 
-    const invitations = (store.admin_invitations || []).filter(i => i.status === 'pending');
+    const admins = await db.all(`
+      SELECT id, name, email, phone, status, suspend_reason, remove_reason, created_at, updated_at
+      FROM users
+      WHERE role = 'admin' AND status != 'removed'
+      ORDER BY created_at ASC
+    `);
+
+    const invitations = await db.all(`
+      SELECT id, email, status, invited_by, invited_by_name, expires_at, last_resent_at, created_at
+      FROM admin_invitations
+      WHERE status IN ('pending', 'expired')
+      ORDER BY created_at DESC
+    `);
 
     res.json({
       admins,
@@ -820,67 +832,160 @@ app.get('/api/admin/users', authenticateToken, requireAdmin, async (req, res) =>
   }
 });
 
-// Suspend / Unsuspend Admin (With LAST ADMIN PROTECTION)
+// Suspend / Unsuspend Admin (Requires mandatory reason, enforces Last Active Admin protection)
 app.put('/api/admin/users/:id/suspend', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
+    const { reason } = req.body;
     const db = await getDb();
-    const store = db.getStore();
 
-    const targetAdmin = store.users.find(u => u.id == id && u.role === 'admin');
-    if (!targetAdmin) return res.status(404).json({ error: 'Administrator not found' });
+    const targetAdmin = await db.get('SELECT * FROM users WHERE id = ? AND role = ?', [id, 'admin']);
+    if (!targetAdmin) return res.status(404).json({ error: 'Administrator not found.' });
 
     const newStatus = targetAdmin.status === 'suspended' ? 'active' : 'suspended';
 
-    // Last Active Admin Protection
     if (newStatus === 'suspended') {
-      const activeCount = db.getActiveAdminCount();
+      if (!reason || !reason.trim()) {
+        return res.status(400).json({ error: 'A mandatory reason is required to suspend an administrator account.' });
+      }
+
+      // Last Active Admin Protection
+      const activeCount = await db.getActiveAdminCount();
       if (activeCount <= 1) {
         return res.status(400).json({
-          error: 'You cannot remove or suspend the last active administrator. At least one active administrator must remain.'
+          error: 'You cannot suspend the last active administrator. At least one active administrator must remain.'
         });
       }
+
+      if (Number(targetAdmin.id) === Number(req.user.id) && activeCount <= 1) {
+        return res.status(400).json({
+          error: 'You cannot suspend yourself if doing so leaves the system without an active administrator.'
+        });
+      }
+
+      await db.run(`
+        UPDATE users
+        SET status = 'suspended', suspend_reason = ?, suspended_at = CURRENT_TIMESTAMP, suspended_by = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `, [reason.trim(), req.user.id, targetAdmin.id]);
+
+      await db.logActivity({
+        adminId: req.user.id,
+        adminEmail: req.user.email,
+        adminName: req.user.name,
+        action: 'Suspended Admin',
+        entity: 'admin_user',
+        entityId: targetAdmin.id,
+        reason: reason.trim(),
+        details: `${req.user.name} suspended ${targetAdmin.email}. Reason: ${reason.trim()}`
+      });
+
+      return res.json({
+        success: true,
+        status: 'suspended',
+        message: `Administrator ${targetAdmin.email} has been suspended.`
+      });
     }
 
-    targetAdmin.status = newStatus;
-    db.save();
+    // Restore access
+    await db.run(`
+      UPDATE users
+      SET status = 'active', suspend_reason = NULL, suspended_at = NULL, suspended_by = NULL, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `, [targetAdmin.id]);
 
     await db.logActivity({
       adminId: req.user.id,
       adminEmail: req.user.email,
       adminName: req.user.name,
-      action: newStatus === 'suspended' ? 'Suspended Admin' : 'Reactivated Admin',
+      action: 'Restored Admin Access',
       entity: 'admin_user',
       entityId: targetAdmin.id,
-      details: `${req.user.name} marked ${targetAdmin.email} as ${newStatus}`
+      reason: reason ? reason.trim() : null,
+      details: `${req.user.name} restored access for ${targetAdmin.email}`
     });
 
-    res.json({ success: true, status: newStatus, message: `Admin ${targetAdmin.email} is now ${newStatus}.` });
+    res.json({
+      success: true,
+      status: 'active',
+      message: `Administrator access for ${targetAdmin.email} has been restored.`
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Remove Admin (With LAST ADMIN PROTECTION)
+// Restore Admin Access (Dedicated restore endpoint)
+app.put('/api/admin/users/:id/restore', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+    const db = await getDb();
+
+    const targetAdmin = await db.get('SELECT * FROM users WHERE id = ? AND role = ?', [id, 'admin']);
+    if (!targetAdmin) return res.status(404).json({ error: 'Administrator not found.' });
+
+    await db.run(`
+      UPDATE users
+      SET status = 'active', suspend_reason = NULL, suspended_at = NULL, suspended_by = NULL, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `, [targetAdmin.id]);
+
+    await db.logActivity({
+      adminId: req.user.id,
+      adminEmail: req.user.email,
+      adminName: req.user.name,
+      action: 'Restored Admin Access',
+      entity: 'admin_user',
+      entityId: targetAdmin.id,
+      reason: reason ? reason.trim() : null,
+      details: `${req.user.name} restored access for ${targetAdmin.email}`
+    });
+
+    res.json({
+      success: true,
+      status: 'active',
+      message: `Administrator access for ${targetAdmin.email} has been restored.`
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Remove Admin (Soft deletion with mandatory reason, enforces Last Active Admin protection)
 app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    const db = await getDb();
-    const store = db.getStore();
+    const { reason } = req.body;
 
-    const targetAdmin = store.users.find(u => u.id == id && u.role === 'admin');
-    if (!targetAdmin) return res.status(404).json({ error: 'Administrator not found' });
+    if (!reason || !reason.trim()) {
+      return res.status(400).json({ error: 'A mandatory reason is required to remove an administrator account.' });
+    }
+
+    const db = await getDb();
+    const targetAdmin = await db.get('SELECT * FROM users WHERE id = ? AND role = ?', [id, 'admin']);
+    if (!targetAdmin) return res.status(404).json({ error: 'Administrator not found.' });
 
     // Last Active Admin Protection
-    const activeCount = db.getActiveAdminCount();
-    if (activeCount <= 1 && (targetAdmin.status === 'active' || !targetAdmin.status)) {
+    const activeCount = await db.getActiveAdminCount();
+    if (activeCount <= 1 && targetAdmin.status === 'active') {
       return res.status(400).json({
-        error: 'You cannot remove or suspend the last active administrator. At least one active administrator must remain.'
+        error: 'You cannot remove the last active administrator. At least one active administrator must remain.'
       });
     }
 
-    store.users = store.users.filter(u => u.id != id);
-    db.save();
+    if (Number(targetAdmin.id) === Number(req.user.id) && activeCount <= 1) {
+      return res.status(400).json({
+        error: 'You cannot remove yourself when you are the last active administrator.'
+      });
+    }
+
+    // Soft deletion: preserves audit logs and foreign keys
+    await db.run(`
+      UPDATE users
+      SET status = 'removed', remove_reason = ?, removed_at = CURRENT_TIMESTAMP, removed_by = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `, [reason.trim(), req.user.id, id]);
 
     await db.logActivity({
       adminId: req.user.id,
@@ -889,203 +994,47 @@ app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, 
       action: 'Removed Admin',
       entity: 'admin_user',
       entityId: id,
-      details: `${req.user.name} removed admin account ${targetAdmin.email}`
+      reason: reason.trim(),
+      details: `${req.user.name} deactivated administrator account ${targetAdmin.email}. Reason: ${reason.trim()}`
     });
 
-    res.json({ success: true, message: `Administrator ${targetAdmin.email} has been removed.` });
+    res.json({ success: true, message: `Administrator ${targetAdmin.email} has been deactivated.` });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Update Current Admin Profile (Name only; email locked as per Requirement 39)
+// Update Current Admin Profile
 app.put('/api/admin/profile', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { name } = req.body;
     if (!name || !name.trim()) return res.status(400).json({ error: 'Name cannot be empty' });
 
     const db = await getDb();
-    const store = db.getStore();
+    await db.run('UPDATE users SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [name.trim(), req.user.id]);
 
-    const user = store.users.find(u => u.id == req.user.id);
-    if (!user) return res.status(404).json({ error: 'User not found' });
-
-    user.name = name.trim();
-    db.save();
-
-    await db.logActivity({
-      adminId: user.id,
-      adminEmail: user.email,
-      adminName: user.name,
-      action: 'Updated Profile Name',
-      entity: 'admin_profile',
-      details: `Name changed to ${user.name}`
-    });
-
-    res.json({ success: true, user: { id: user.id, name: user.name, email: user.email }, message: 'Profile updated' });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Admin Password Change
-app.put('/api/admin/change-password', authenticateToken, requireAdmin, async (req, res) => {
-  try {
-    const { currentPassword, newPassword, confirmPassword } = req.body;
-    if (!currentPassword || !newPassword) {
-      return res.status(400).json({ error: 'Current password and new password are required' });
-    }
-
-    if (newPassword !== confirmPassword) {
-      return res.status(400).json({ error: 'New passwords do not match' });
-    }
-
-    if (newPassword.length < 6) {
-      return res.status(400).json({ error: 'Password must be at least 6 characters long' });
-    }
-
-    const db = await getDb();
-    const store = db.getStore();
-
-    const user = store.users.find(u => u.id == req.user.id);
-    if (!user) return res.status(404).json({ error: 'User not found' });
-
-    const isMatch = await bcrypt.compare(currentPassword, user.password_hash);
-    if (!isMatch) return res.status(400).json({ error: 'Current password is incorrect' });
-
-    user.password_hash = await bcrypt.hash(newPassword, 10);
-    db.save();
-
-    await db.logActivity({
-      adminId: user.id,
-      adminEmail: user.email,
-      adminName: user.name,
-      action: 'Changed Password',
-      entity: 'admin_profile',
-      details: 'Password updated successfully'
-    });
-
-    res.json({ success: true, message: 'Password updated successfully' });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// =================== 4. ACTIVITY LOGS & NOTIFICATIONS ===================
-
-app.get('/api/admin/activity-logs', authenticateToken, requireAdmin, async (req, res) => {
-  try {
-    const db = await getDb();
-    const logs = await db.all('SELECT * FROM activity_logs');
-    res.json(logs);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.get('/api/admin/notifications', authenticateToken, requireAdmin, async (req, res) => {
-  try {
-    const db = await getDb();
-    const notifications = await db.all('SELECT * FROM admin_notifications');
-    const unreadCount = notifications.filter(n => n.read === 0).length;
-    res.json({ notifications, unreadCount });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.put('/api/admin/notifications/:id/read', authenticateToken, requireAdmin, async (req, res) => {
-  try {
-    const db = await getDb();
-    const store = db.getStore();
-    const n = (store.admin_notifications || []).find(item => item.id == req.params.id);
-    if (n) {
-      n.read = 1;
-      db.save();
-    }
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.put('/api/admin/notifications/read-all', authenticateToken, requireAdmin, async (req, res) => {
-  try {
-    const db = await getDb();
-    const store = db.getStore();
-    (store.admin_notifications || []).forEach(n => { n.read = 1; });
-    db.save();
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// =================== 5. IMAGE UPLOAD HANDLER ===================
-
-app.post('/api/upload', authenticateToken, requireAdmin, async (req, res) => {
-  try {
-    const { base64Data, filename } = req.body;
-    if (!base64Data) return res.status(400).json({ error: 'No image data provided' });
-
-    const matches = base64Data.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
-    if (!matches || matches.length !== 3) {
-      return res.status(400).json({ error: 'Invalid base64 image string' });
-    }
-
-    const mimeType = (matches[1] || '').toLowerCase();
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/jpg'];
-    if (!allowedTypes.includes(mimeType)) {
-      return res.status(400).json({ error: 'Invalid file type. Only JPEG, PNG, WEBP, and GIF images are allowed.' });
-    }
-
-    const ext = mimeType.split('/')[1] || 'jpg';
-    const cleanExt = ext === 'jpeg' ? 'jpg' : ext;
-    const buffer = Buffer.from(matches[2], 'base64');
-
-    // Validate size (max 5MB)
-    if (buffer.length > 5 * 1024 * 1024) {
-      return res.status(400).json({ error: 'File size exceeds 5MB limit. Please upload an image under 5MB.' });
-    }
-
-    const uploadsDir = path.join(__dirname, '../public/assets/uploads');
-    if (!fs.existsSync(uploadsDir)) {
-      fs.mkdirSync(uploadsDir, { recursive: true });
-    }
-
-    const safeName = (filename ? filename.replace(/[^a-zA-Z0-9_-]/g, '') : 'img') + `_${Date.now()}.${cleanExt}`;
-    const filePath = path.join(uploadsDir, safeName);
-    fs.writeFileSync(filePath, buffer);
-
-    const publicUrl = `/assets/uploads/${safeName}`;
-
-    const db = await getDb();
     await db.logActivity({
       adminId: req.user.id,
       adminEmail: req.user.email,
       adminName: req.user.name,
-      action: 'Uploaded Image',
-      entity: 'media',
-      entityId: safeName,
-      details: `Uploaded ${safeName} (${(buffer.length / 1024).toFixed(1)} KB)`
+      action: 'Updated Admin Profile',
+      entity: 'admin_user',
+      entityId: req.user.id,
+      details: `Updated name to "${name.trim()}"`
     });
 
-    res.json({
-      success: true,
-      image_url: publicUrl,
-      message: 'Image uploaded successfully'
-    });
+    res.json({ success: true, message: 'Profile updated successfully' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// =================== 6. MENU & CATEGORIES & STOCK ===================
+// =================== 4. MENU CATEGORIES & ITEMS ===================
 
 app.get('/api/categories', async (req, res) => {
   try {
     const db = await getDb();
-    const categories = await db.all('SELECT * FROM menu_categories');
+    const categories = await db.all('SELECT * FROM menu_categories WHERE active = 1 ORDER BY display_order ASC, id ASC');
     res.json(categories);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1094,24 +1043,23 @@ app.get('/api/categories', async (req, res) => {
 
 app.post('/api/categories', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const { name, slug, display_order, active } = req.body;
-    if (!name) return res.status(400).json({ error: 'Category name is required' });
+    const { name, slug, display_order } = req.body;
+    if (!name || !slug) return res.status(400).json({ error: 'Category name and slug are required' });
 
-    const cleanSlug = slug || name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
     const db = await getDb();
     const result = await db.run(`
-      INSERT INTO menu_categories (id, name, slug, display_order, active)
-      VALUES (null, ?, ?, ?, ?)
-    `, [name, cleanSlug, display_order || 0, active !== undefined ? (active ? 1 : 0) : 1]);
+      INSERT INTO menu_categories (name, slug, display_order, active)
+      VALUES (?, ?, ?, 1)
+    `, [name, slug.toLowerCase(), display_order || 0]);
 
     await db.logActivity({
       adminId: req.user.id,
       adminEmail: req.user.email,
       adminName: req.user.name,
-      action: 'Created Category',
-      entity: 'category',
+      action: 'Created Menu Category',
+      entity: 'menu_category',
       entityId: result.lastID,
-      details: `Added category "${name}"`
+      details: `Created category "${name}"`
     });
 
     res.json({ id: result.lastID, message: 'Category created' });
@@ -1120,71 +1068,16 @@ app.post('/api/categories', authenticateToken, requireAdmin, async (req, res) =>
   }
 });
 
-app.put('/api/categories/:id', authenticateToken, requireAdmin, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { name, slug, display_order, active } = req.body;
-    const db = await getDb();
-
-    await db.run(`
-      UPDATE menu_categories
-      SET name = ?, slug = ?, display_order = ?, active = ?
-      WHERE id = ?
-    `, [name, slug, display_order, active !== undefined ? (active ? 1 : 0) : 1, id]);
-
-    await db.logActivity({
-      adminId: req.user.id,
-      adminEmail: req.user.email,
-      adminName: req.user.name,
-      action: 'Updated Category',
-      entity: 'category',
-      entityId: id,
-      details: `Modified category #${id}`
-    });
-
-    res.json({ message: 'Category updated' });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.delete('/api/categories/:id', authenticateToken, requireAdmin, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const db = await getDb();
-    const store = db.getStore();
-
-    // Prevent deleting category if active products depend on it (Requirement 11)
-    const dependentItems = (store.menu_items || []).filter(m => m.category_id == id);
-    if (dependentItems.length > 0) {
-      return res.status(400).json({
-        error: `Cannot delete category: ${dependentItems.length} active menu item(s) are linked to it. Please reassign or delete the items first.`
-      });
-    }
-
-    await db.run('DELETE FROM menu_categories WHERE id = ?', [id]);
-
-    await db.logActivity({
-      adminId: req.user.id,
-      adminEmail: req.user.email,
-      adminName: req.user.name,
-      action: 'Deleted Category',
-      entity: 'category',
-      entityId: id,
-      details: `Deleted category #${id}`
-    });
-
-    res.json({ message: 'Category deleted' });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
 app.get('/api/menu', async (req, res) => {
   try {
     const db = await getDb();
-    const menuItems = await db.all('SELECT * FROM menu_items');
-    res.json(menuItems);
+    const items = await db.all(`
+      SELECT m.*, c.name as category_name, c.slug as category_slug
+      FROM menu_items m
+      LEFT JOIN menu_categories c ON m.category_id = c.id
+      ORDER BY m.id ASC
+    `);
+    res.json(items);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1192,26 +1085,26 @@ app.get('/api/menu', async (req, res) => {
 
 app.post('/api/menu', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const { category_id, name, description, image_url, veg_type, price, available, popular, stock_quantity, prep_time_mins, is_special, is_recommended } = req.body;
-    if (!name || !price) return res.status(400).json({ error: 'Item name and price are required' });
+    const {
+      category_id, name, description, image_url, veg_type, price,
+      price_chicken, price_veg, available, popular, stock_quantity,
+      prep_time_mins, is_special, is_recommended
+    } = req.body;
+
+    if (!name || price === undefined) return res.status(400).json({ error: 'Name and price are required' });
 
     const db = await getDb();
     const result = await db.run(`
-      INSERT INTO menu_items (category_id, name, description, image_url, veg_type, price, available, popular, stock_quantity, prep_time_mins, is_special, is_recommended)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO menu_items (
+        category_id, name, description, image_url, veg_type, price, price_chicken, price_veg,
+        available, popular, stock_quantity, prep_time_mins, is_special, is_recommended
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
-      category_id || 1,
-      name,
-      description || '',
-      image_url || 'https://images.unsplash.com/photo-1550547660-d9450f859349?auto=format&fit=crop&w=600&q=80',
-      veg_type || 'veg',
-      Number(price) || 0,
-      available !== undefined ? (available ? 1 : 0) : 1,
-      popular ? 1 : 0,
-      stock_quantity !== undefined ? Number(stock_quantity) : 20,
-      prep_time_mins ? Number(prep_time_mins) : 12,
-      is_special ? 1 : 0,
-      is_recommended ? 1 : 0
+      category_id || 1, name, description || '', image_url || '/assets/food/burger.jpg',
+      veg_type || 'veg', Number(price), price_chicken ? Number(price_chicken) : null,
+      price_veg ? Number(price_veg) : null, available !== undefined ? (available ? 1 : 0) : 1,
+      popular ? 1 : 0, stock_quantity !== undefined ? Number(stock_quantity) : 20,
+      prep_time_mins ? Number(prep_time_mins) : 12, is_special ? 1 : 0, is_recommended ? 1 : 0
     ]);
 
     await db.logActivity({
@@ -1221,7 +1114,7 @@ app.post('/api/menu', authenticateToken, requireAdmin, async (req, res) => {
       action: 'Added Menu Item',
       entity: 'menu_item',
       entityId: result.lastID,
-      details: `Added "${name}" (₹${price}, ${veg_type})`
+      details: `Added item "${name}" (₹${price})`
     });
 
     res.json({ id: result.lastID, message: 'Item added successfully' });
@@ -1233,14 +1126,25 @@ app.post('/api/menu', authenticateToken, requireAdmin, async (req, res) => {
 app.put('/api/menu/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    const { category_id, name, description, image_url, veg_type, price, available, popular, stock_quantity, prep_time_mins, is_special, is_recommended } = req.body;
+    const {
+      category_id, name, description, image_url, veg_type, price,
+      price_chicken, price_veg, available, popular, stock_quantity,
+      prep_time_mins, is_special, is_recommended
+    } = req.body;
 
     const db = await getDb();
     await db.run(`
       UPDATE menu_items
-      SET category_id = ?, name = ?, description = ?, image_url = ?, veg_type = ?, price = ?, available = ?, popular = ?, stock_quantity = ?, prep_time_mins = ?, is_special = ?, is_recommended = ?
+      SET category_id = ?, name = ?, description = ?, image_url = ?, veg_type = ?, price = ?,
+          price_chicken = ?, price_veg = ?, available = ?, popular = ?, stock_quantity = ?,
+          prep_time_mins = ?, is_special = ?, is_recommended = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
-    `, [category_id, name, description, image_url, veg_type, price, available ? 1 : 0, popular ? 1 : 0, stock_quantity, prep_time_mins, is_special ? 1 : 0, is_recommended ? 1 : 0, id]);
+    `, [
+      category_id, name, description, image_url, veg_type, Number(price),
+      price_chicken ? Number(price_chicken) : null, price_veg ? Number(price_veg) : null,
+      available ? 1 : 0, popular ? 1 : 0, Number(stock_quantity), Number(prep_time_mins),
+      is_special ? 1 : 0, is_recommended ? 1 : 0, id
+    ]);
 
     await db.logActivity({
       adminId: req.user.id,
@@ -1263,7 +1167,7 @@ app.patch('/api/menu/:id/availability', authenticateToken, requireAdmin, async (
     const { id } = req.params;
     const { available } = req.body;
     const db = await getDb();
-    await db.run('UPDATE menu_items SET available = ? WHERE id = ?', [available ? 1 : 0, id]);
+    await db.run('UPDATE menu_items SET available = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [available ? 1 : 0, id]);
 
     await db.logActivity({
       adminId: req.user.id,
@@ -1276,29 +1180,6 @@ app.patch('/api/menu/:id/availability', authenticateToken, requireAdmin, async (
     });
 
     res.json({ message: `Item marked as ${available ? 'Available' : 'Sold Out'}` });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.patch('/api/menu/:id/stock', authenticateToken, requireAdmin, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { stock_quantity } = req.body;
-    const db = await getDb();
-    await db.run('UPDATE menu_items SET stock_quantity = ? WHERE id = ?', [Number(stock_quantity), id]);
-
-    await db.logActivity({
-      adminId: req.user.id,
-      adminEmail: req.user.email,
-      adminName: req.user.name,
-      action: 'Updated Stock',
-      entity: 'menu_item',
-      entityId: id,
-      details: `Set stock of item #${id} to ${stock_quantity}`
-    });
-
-    res.json({ message: 'Stock updated' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1326,17 +1207,15 @@ app.delete('/api/menu/:id', authenticateToken, requireAdmin, async (req, res) =>
   }
 });
 
-// =================== 7. ORDERS & 2 AM RESET NUMBERING ===================
+// =================== 5. ORDERS & CHECKOUT ===================
 
-// Helper: Check if cafe is currently open
 function isCafeCurrentlyOpen(settings) {
   try {
     const rawHours = settings.business_hours;
     if (rawHours) {
       const parsed = typeof rawHours === 'string' ? JSON.parse(rawHours) : rawHours;
       const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-      const now = new Date();
-      const currentDay = days[now.getDay()];
+      const currentDay = days[new Date().getDay()];
       const dayConfig = parsed[currentDay];
       if (dayConfig && dayConfig.closed) return false;
     }
@@ -1346,7 +1225,7 @@ function isCafeCurrentlyOpen(settings) {
   }
 }
 
-// Create Order (Validates hours, delivery radius, recomputes authoritative prices & discounts, decrements stock atomically)
+// Create Order (Authoritative pricing, recomputed tax and discounts, creates pending order)
 app.post('/api/orders', async (req, res) => {
   try {
     const {
@@ -1356,7 +1235,7 @@ app.post('/api/orders', async (req, res) => {
     } = req.body;
 
     if (!customer_name || !phone || !items || !Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ error: 'Missing required customer or item details' });
+      return res.status(400).json({ error: 'Missing required customer or item details.' });
     }
 
     const cleanPhone = normalizePhone(phone);
@@ -1370,21 +1249,20 @@ app.post('/api/orders', async (req, res) => {
     }
 
     const db = await getDb();
-    const store = db.getStore();
 
-    // Verify customer is registered and authenticated in system
+    // Verify customer exists in database
     let customerUser = null;
     const authHeader = req.headers['authorization'];
     const authToken = authHeader && authHeader.split(' ')[1];
     if (authToken) {
       try {
         const payload = jwt.verify(authToken, JWT_SECRET);
-        customerUser = store.users.find(u => u.id === payload.id);
+        customerUser = await db.get('SELECT * FROM users WHERE id = ?', [payload.id]);
       } catch (e) {}
     }
 
     if (!customerUser) {
-      customerUser = store.users.find(u => u.phone === cleanPhone);
+      customerUser = await db.get('SELECT * FROM users WHERE phone = ?', [cleanPhone]);
     }
 
     if (!customerUser) {
@@ -1393,28 +1271,15 @@ app.post('/api/orders', async (req, res) => {
       });
     }
 
-    // Fetch settings map
+    // Settings validation
     const settingsRows = await db.all('SELECT * FROM settings');
     const settings = {};
     for (const r of settingsRows) settings[r.key] = r.value;
 
-    // Validate cafe operating hours
     if (!isCafeCurrentlyOpen(settings)) {
-      return res.status(400).json({ error: 'FrenchBell Cafe is currently closed for new orders. Please check our opening hours.' });
+      return res.status(400).json({ error: 'FrenchBell Cafe is currently closed for new orders.' });
     }
 
-    // Validate order type enabled
-    if (cleanOrderType === 'dine-in' && settings.dine_in_enabled === '0') {
-      return res.status(400).json({ error: 'Dine-in ordering is currently unavailable.' });
-    }
-    if (cleanOrderType === 'takeaway' && settings.takeaway_enabled === '0') {
-      return res.status(400).json({ error: 'Takeaway ordering is currently unavailable.' });
-    }
-    if (cleanOrderType === 'delivery' && settings.delivery_enabled === '0') {
-      return res.status(400).json({ error: 'Doorstep delivery is currently unavailable.' });
-    }
-
-    // Validate delivery radius and address
     let calculatedDeliveryCharge = 0;
     if (cleanOrderType === 'delivery') {
       if (!delivery_address || !delivery_address.trim()) {
@@ -1435,16 +1300,16 @@ app.post('/api/orders', async (req, res) => {
       }
     }
 
-    // Server-side authoritative item verification and price recalculation
+    // Authoritative item price calculation
     const validatedItems = [];
     let serverSubtotal = 0;
 
     for (const cartItem of items) {
       const itemId = cartItem.menu_item_id || cartItem.id;
-      const dbItem = (store.menu_items || []).find(m => m.id == itemId);
+      const dbItem = await db.get('SELECT * FROM menu_items WHERE id = ?', [itemId]);
 
       if (!dbItem) {
-        return res.status(400).json({ error: `Item "${cartItem.item_name || cartItem.name || 'Unknown'}" was not found on our current menu.` });
+        return res.status(400).json({ error: `Item "${cartItem.item_name || 'Unknown'}" was not found on our current menu.` });
       }
 
       if (dbItem.available === 0 || (dbItem.stock_quantity !== undefined && Number(dbItem.stock_quantity) <= 0)) {
@@ -1452,10 +1317,6 @@ app.post('/api/orders', async (req, res) => {
       }
 
       const qty = Math.max(1, parseInt(cartItem.quantity, 10) || 1);
-      if (dbItem.stock_quantity !== undefined && Number(dbItem.stock_quantity) < qty) {
-        return res.status(400).json({ error: `Only ${dbItem.stock_quantity} units of "${dbItem.name}" are currently available in stock.` });
-      }
-
       let authoritativeUnitPrice = Number(dbItem.price);
       if (cartItem.variant === 'Veg' && dbItem.price_veg) authoritativeUnitPrice = Number(dbItem.price_veg);
       if (cartItem.variant === 'Chicken' && dbItem.price_chicken) authoritativeUnitPrice = Number(dbItem.price_chicken);
@@ -1470,32 +1331,24 @@ app.post('/api/orders', async (req, res) => {
         quantity: qty,
         unit_price: authoritativeUnitPrice,
         total_price: itemTotal,
-        special_instructions: cartItem.special_instructions || cartItem.specialInstructions || ''
+        special_instructions: cartItem.special_instructions || ''
       });
     }
 
-    // Check minimum delivery order amount
-    if (cleanOrderType === 'delivery') {
-      const minDeliveryAmount = Number(settings.min_order_delivery || 120);
-      if (serverSubtotal < minDeliveryAmount) {
-        return res.status(400).json({ error: `Minimum order amount for doorstep delivery is ₹${minDeliveryAmount}. Please add more items.` });
-      }
-    }
-
-    // Authoritative Coupon Revalidation on the server
+    // Coupon discount revalidation
     let serverDiscount = 0;
     if (coupon_code) {
       const cleanCode = String(coupon_code).trim().toUpperCase();
-      const dbCoupon = (store.offers || []).find(o => o.active !== 0 && o.coupon_code && o.coupon_code.toUpperCase() === cleanCode);
+      const dbCoupon = await db.get('SELECT * FROM offers WHERE UPPER(coupon_code) = ? AND active = 1', [cleanCode]);
 
       if (dbCoupon) {
-        const meetsMinOrder = serverSubtotal >= (dbCoupon.minimum_order || 0);
+        const meetsMinOrder = serverSubtotal >= Number(dbCoupon.minimum_order || 0);
         const orderTypeMatches = !dbCoupon.applicable_order_type || dbCoupon.applicable_order_type === 'all' || dbCoupon.applicable_order_type === cleanOrderType;
 
         if (meetsMinOrder && orderTypeMatches) {
           if (dbCoupon.discount_type === 'percentage') {
-            serverDiscount = Math.round((serverSubtotal * dbCoupon.discount_value) / 100);
-            if (dbCoupon.max_discount) serverDiscount = Math.min(serverDiscount, dbCoupon.max_discount);
+            serverDiscount = Math.round((serverSubtotal * Number(dbCoupon.discount_value)) / 100);
+            if (dbCoupon.max_discount) serverDiscount = Math.min(serverDiscount, Number(dbCoupon.max_discount));
           } else {
             serverDiscount = Number(dbCoupon.discount_value || 0);
           }
@@ -1503,97 +1356,232 @@ app.post('/api/orders', async (req, res) => {
       }
     }
 
-    // Authoritative 5% GST calculation
+    // GST Tax Calculation
     const taxRate = Number(settings.tax_rate_percent || 5) / 100;
     const taxableAmount = Math.max(0, serverSubtotal - serverDiscount);
     const serverTax = Math.round(taxableAmount * taxRate);
     const serverGrandTotal = Math.max(0, taxableAmount + serverTax + calculatedDeliveryCharge);
 
-    const order_number = generateNextOrderNumber();
+    const orderNumber = await db.generateNextOrderNumber();
 
-    // Execute order creation and stock decrements atomically
-    const orderResult = await db.transaction(async (tx) => {
-      const result = await tx.run(`
+    // Create Order with pending payment status
+    const createdOrder = await db.transaction(async (tx) => {
+      const insertResult = await tx.run(`
         INSERT INTO orders (
           order_number, user_id, order_type, table_number, num_people, customer_name, phone,
           pickup_time, delivery_address, landmark, pincode, subtotal, discount,
-          delivery_charge, total, payment_status, payment_method, order_status, special_instructions
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'paid', ?, 'received', ?)
+          delivery_charge, tax, total, payment_status, payment_method, order_status, special_instructions
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, 'received', ?)
       `, [
-        order_number, user_id || null, cleanOrderType, table_number || null, num_people || null,
-        customer_name.trim(), phone.trim(), pickup_time || null, delivery_address || null, landmark || null,
-        pincode || null, serverSubtotal, serverDiscount, calculatedDeliveryCharge, serverGrandTotal,
-        payment_method || 'upi', special_instructions || ''
+        orderNumber, customerUser.id, cleanOrderType, table_number || null, num_people || null,
+        customer_name.trim(), cleanPhone, pickup_time || null, delivery_address || null, landmark || null,
+        pincode || null, serverSubtotal, serverDiscount, calculatedDeliveryCharge, serverTax, serverGrandTotal,
+        payment_method || 'simulated', special_instructions || ''
       ]);
 
-      const orderId = result.lastID;
+      const orderId = insertResult.lastID;
 
       for (const item of validatedItems) {
         await tx.run(`
-          INSERT INTO order_items (order_id, menu_item_id, item_name, variant, quantity, unit_price, total_price)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
-        `, [orderId, item.menu_item_id, item.item_name, item.variant, item.quantity, item.unit_price, item.total_price]);
-
-        tx.decrementStockForOrderItem(item.menu_item_id, item.quantity);
+          INSERT INTO order_items (order_id, menu_item_id, item_name, variant, quantity, unit_price, total_price, special_instructions)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `, [orderId, item.menu_item_id, item.item_name, item.variant, item.quantity, item.unit_price, item.total_price, item.special_instructions]);
       }
 
-      const txnId = 'TXN_' + Date.now() + '_' + Math.floor(100 + Math.random() * 900);
       await tx.run(`
-        INSERT INTO payments (order_id, transaction_id, amount, method, status)
-        VALUES (?, ?, ?, ?, 'paid')
-      `, [orderId, txnId, serverGrandTotal, payment_method || 'upi']);
-
-      await tx.run(`
-        INSERT INTO receipts (order_id, whatsapp_status) VALUES (?, 'pending')
+        INSERT INTO order_status_history (order_id, previous_status, new_status, changed_by, change_reason)
+        VALUES (?, NULL, 'received', 'Customer Checkout', 'Order created pending payment')
       `, [orderId]);
 
-      await tx.addAdminNotification({
-        title: `New Order #${order_number} Received`,
-        message: `${customer_name} placed a ₹${serverGrandTotal} ${cleanOrderType.toUpperCase()} order.`,
-        type: 'order',
-        linkTab: 'live-orders'
-      });
-
-      return { orderId, txnId };
+      return await tx.get('SELECT * FROM orders WHERE id = ?', [orderId]);
     });
 
-    const orderData = await db.get('SELECT * FROM orders WHERE id = ?', [orderResult.orderId]);
-    const orderItems = await db.all('SELECT * FROM order_items WHERE order_id = ?', [orderResult.orderId]);
+    createdOrder.items = validatedItems;
 
     res.json({
       success: true,
-      order_number,
-      order: { ...orderData, items: orderItems, order_number },
-      transaction_id: orderResult.txnId,
-      message: 'Ding! Your order is placed at French Bell Cafe.'
+      order: createdOrder,
+      order_number: orderNumber,
+      message: 'Order created successfully. Ready for payment.'
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Get Orders with search & filters
+// =================== 6. PAYMENT INTEGRATION (SIMULATED & TEST MODE) ===================
+
+// Execute Simulated Payment (Success or Failure)
+app.post('/api/payment/simulate', async (req, res) => {
+  try {
+    const { order_number, outcome, method } = req.body;
+    if (!order_number) {
+      return res.status(400).json({ error: 'Order number is required for payment simulation.' });
+    }
+
+    const result = await PaymentService.executeSimulatedPayment({
+      orderNumber: order_number,
+      outcome: outcome || 'success',
+      method: method || 'simulated_upi'
+    });
+
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Legacy / General Payment Verify route
+app.post('/api/payment/verify', async (req, res) => {
+  try {
+    const { order_number, outcome, payment_method } = req.body;
+    if (!order_number) return res.status(400).json({ error: 'order_number is required' });
+
+    const result = await PaymentService.executeSimulatedPayment({
+      orderNumber: order_number,
+      outcome: outcome || 'success',
+      method: payment_method || 'simulated_upi'
+    });
+
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// =================== 7. ORDER HISTORY & TRACKING ===================
+
+// Customer Order History (Strict Ownership Enforced)
+app.get('/api/customer/orders', authenticateToken, async (req, res) => {
+  try {
+    const db = await getDb();
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 10));
+    const offset = (page - 1) * limit;
+
+    // Strict ownership check: only return orders belonging to this customer
+    const orders = await db.all(`
+      SELECT * FROM orders
+      WHERE user_id = ? OR phone = ?
+      ORDER BY created_at DESC
+      LIMIT ? OFFSET ?
+    `, [req.user.id, req.user.phone, limit, offset]);
+
+    for (const ord of orders) {
+      ord.items = await db.all('SELECT * FROM order_items WHERE order_id = ?', [ord.id]);
+    }
+
+    const totalCountRes = await db.get(`
+      SELECT COUNT(*) as count FROM orders
+      WHERE user_id = ? OR phone = ?
+    `, [req.user.id, req.user.phone]);
+
+    const total = parseInt(totalCountRes?.count || '0', 10);
+
+    res.json({
+      orders,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit)
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Helper: Retrieve order safely by integer ID or string order_number
+export async function getOrderByIdOrNumber(db, identifier) {
+  if (!identifier) return null;
+  const isNumeric = /^\d+$/.test(String(identifier).trim());
+  if (isNumeric) {
+    return await db.get('SELECT * FROM orders WHERE id = ? OR order_number = ?', [parseInt(identifier, 10), String(identifier).trim()]);
+  }
+  return await db.get('SELECT * FROM orders WHERE order_number = ?', [String(identifier).trim()]);
+}
+
+// Order Tracking Endpoint (Ownership checked where appropriate)
+app.get('/api/orders/:orderNumber/track', async (req, res) => {
+  try {
+    const { orderNumber } = req.params;
+    const db = await getDb();
+
+    const order = await getOrderByIdOrNumber(db, orderNumber);
+    if (!order) return res.status(404).json({ error: 'Order not found.' });
+
+    // Optional token ownership check
+    const authHeader = req.headers['authorization'];
+    const authToken = authHeader && authHeader.split(' ')[1];
+    if (authToken) {
+      try {
+        const payload = jwt.verify(authToken, JWT_SECRET);
+        if (payload.role !== 'admin' && order.user_id && Number(order.user_id) !== Number(payload.id) && order.phone !== payload.phone) {
+          return res.status(403).json({ error: 'Unauthorized to track this order.' });
+        }
+      } catch (e) {}
+    }
+
+    order.items = await db.all('SELECT * FROM order_items WHERE order_id = ?', [order.id]);
+    const history = await db.all('SELECT * FROM order_status_history WHERE order_id = ? ORDER BY created_at ASC', [order.id]);
+
+    res.json({
+      order_number: order.order_number,
+      order_type: order.order_type,
+      order_status: order.order_status,
+      payment_status: order.payment_status,
+      customer_name: order.customer_name,
+      total: order.total,
+      created_at: order.created_at,
+      updated_at: order.updated_at,
+      items: order.items,
+      history
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Admin Orders list with filters
 app.get('/api/orders', async (req, res) => {
   try {
     const db = await getDb();
-    const { status, type, phone, table, search } = req.query;
-    let orders = await db.all('SELECT * FROM orders');
+    const { status, type, phone, search, page, limit } = req.query;
 
-    if (status && status !== 'all') orders = orders.filter(o => o.order_status === status);
-    if (type && type !== 'all') orders = orders.filter(o => o.order_type === type);
-    if (phone) orders = orders.filter(o => o.phone === phone);
-    if (table) orders = orders.filter(o => String(o.table_number) === String(table));
+    let query = 'SELECT * FROM orders WHERE 1=1';
+    const params = [];
 
+    if (status && status !== 'all') {
+      params.push(status);
+      query += ` AND order_status = $${params.length}`;
+    }
+    if (type && type !== 'all') {
+      params.push(type);
+      query += ` AND order_type = $${params.length}`;
+    }
+    if (phone) {
+      params.push(phone);
+      query += ` AND phone = $${params.length}`;
+    }
     if (search) {
-      const q = search.toLowerCase().trim();
-      orders = orders.filter(o =>
-        (o.order_number || '').toLowerCase().includes(q) ||
-        (o.customer_name || '').toLowerCase().includes(q) ||
-        (o.phone || '').includes(q)
-      );
+      params.push(`%${search.trim().toLowerCase()}%`);
+      query += ` AND (LOWER(order_number) LIKE $${params.length} OR LOWER(customer_name) LIKE $${params.length} OR phone LIKE $${params.length})`;
     }
 
-    for (let o of orders) {
+    query += ' ORDER BY created_at DESC';
+
+    if (limit) {
+      const parsedLimit = Math.min(100, parseInt(limit, 10));
+      const parsedOffset = ((Math.max(1, parseInt(page, 10) || 1)) - 1) * parsedLimit;
+      params.push(parsedLimit);
+      query += ` LIMIT $${params.length}`;
+      params.push(parsedOffset);
+      query += ` OFFSET $${params.length}`;
+    }
+
+    const orders = await db.all(query, params);
+    for (const o of orders) {
       o.items = await db.all('SELECT * FROM order_items WHERE order_id = ?', [o.id]);
     }
 
@@ -1603,15 +1591,16 @@ app.get('/api/orders', async (req, res) => {
   }
 });
 
+// Single Order detail
 app.get('/api/orders/:orderNumber', async (req, res) => {
   try {
     const { orderNumber } = req.params;
     const db = await getDb();
-    const order = await db.get('SELECT * FROM orders WHERE order_number = ? OR id = ?', [orderNumber, orderNumber]);
+    const order = await getOrderByIdOrNumber(db, orderNumber);
     if (!order) return res.status(404).json({ error: 'Order not found' });
 
     order.items = await db.all('SELECT * FROM order_items WHERE order_id = ?', [order.id]);
-    const payment = await db.get('SELECT * FROM payments WHERE order_id = ?', [order.id]);
+    const payment = await db.get('SELECT * FROM payments WHERE order_id = ? ORDER BY created_at DESC LIMIT 1', [order.id]);
     order.payment = payment;
 
     res.json(order);
@@ -1620,20 +1609,19 @@ app.get('/api/orders/:orderNumber', async (req, res) => {
   }
 });
 
-// Update Order Status (With Workflow Validation & Activity Log)
+// Update Order Status (Admin only: validated transitions & status history)
 app.put('/api/orders/:id/status', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { order_status } = req.body;
     const db = await getDb();
 
-    const order = await db.get('SELECT * FROM orders WHERE id = ? OR order_number = ?', [id, id]);
+    const order = await getOrderByIdOrNumber(db, id);
     if (!order) return res.status(404).json({ error: 'Order not found' });
 
     const currentStatus = order.order_status;
     const isDelivery = order.order_type === 'delivery';
 
-    // Strict status transition check (Requirement 6)
     if (!canTransitionOrderStatus(currentStatus, order_status, isDelivery)) {
       return res.status(400).json({
         error: `Invalid status transition: Order #${order.order_number} cannot move from "${currentStatus}" to "${order_status}".`
@@ -1644,11 +1632,18 @@ app.put('/api/orders/:id/status', authenticateToken, requireAdmin, async (req, r
     if (order_status === 'cancelled' && currentStatus !== 'cancelled') {
       const orderItems = await db.all('SELECT * FROM order_items WHERE order_id = ?', [order.id]);
       for (const item of orderItems) {
-        db.restoreStockForOrderItem(item.menu_item_id, item.quantity);
+        if (item.menu_item_id) {
+          await db.restoreStockForOrderItem(item.menu_item_id, item.quantity);
+        }
       }
     }
 
-    await db.run('UPDATE orders SET order_status = ? WHERE id = ?', [order_status, order.id]);
+    await db.run('UPDATE orders SET order_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [order_status, order.id]);
+
+    await db.run(`
+      INSERT INTO order_status_history (order_id, previous_status, new_status, changed_by, change_reason)
+      VALUES (?, ?, ?, ?, 'Admin status update')
+    `, [order.id, currentStatus, order_status, req.user.name]);
 
     await db.logActivity({
       adminId: req.user.id,
@@ -1660,113 +1655,208 @@ app.put('/api/orders/:id/status', authenticateToken, requireAdmin, async (req, r
       details: `Status of #${order.order_number} changed from "${currentStatus}" to "${order_status}"`
     });
 
-    if (order_status === 'ready' || order_status === 'out_for_delivery') {
-      await db.addAdminNotification({
-        title: `Order #${order.order_number} Ready`,
-        message: `${order.order_type.toUpperCase()} for ${order.customer_name} is ready for pickup/dispatch.`,
-        type: 'info',
-        linkTab: 'live-orders'
-      });
-    }
-
     res.json({ success: true, message: `Order #${order.order_number} updated to ${order_status}` });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// =================== 8. CUSTOMER MANAGEMENT ===================
+// =================== 8. DIGITAL RECEIPTS ===================
+
+// Receipt Data Endpoint
+app.get('/api/receipts/:orderNumber', async (req, res) => {
+  try {
+    const { orderNumber } = req.params;
+    const db = await getDb();
+
+    const order = await getOrderByIdOrNumber(db, orderNumber);
+    if (!order) return res.status(404).json({ error: 'Receipt not found' });
+
+    order.items = await db.all('SELECT * FROM order_items WHERE order_id = ?', [order.id]);
+    const receipt = await db.get('SELECT * FROM receipts WHERE order_id = ?', [order.id]);
+    const payment = await db.get('SELECT * FROM payments WHERE order_id = ? ORDER BY created_at DESC LIMIT 1', [order.id]);
+
+    res.json({
+      receipt_number: receipt?.receipt_number || `RCP_${order.order_number}`,
+      order,
+      payment,
+      isSimulated: payment?.provider === 'simulated'
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Receipt Printable / Download HTML
+app.get('/api/receipts/:orderNumber/download', async (req, res) => {
+  try {
+    const { orderNumber } = req.params;
+    const db = await getDb();
+    const order = await getOrderByIdOrNumber(db, orderNumber);
+    if (!order) return res.status(404).send('<h2>Receipt Not Found</h2>');
+
+    const items = await db.all('SELECT * FROM order_items WHERE order_id = ?', [order.id]);
+    const payment = await db.get('SELECT * FROM payments WHERE order_id = ? ORDER BY created_at DESC LIMIT 1', [order.id]);
+    const isSimulated = payment?.provider === 'simulated';
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Receipt - FrenchBell Cafe #${order.order_number}</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 24px; max-width: 440px; margin: auto; color: #2D1810; background: #FFFDF9; border: 1px solid #D4AF37; border-radius: 16px; }
+    .badge { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: bold; text-transform: uppercase; }
+    .simulated { background: #FEF3C7; color: #92400E; border: 1px solid #F59E0B; }
+    .paid { background: #D1FAE5; color: #065F46; }
+    table { width: 100%; border-collapse: collapse; margin-top: 14px; }
+    th { text-align: left; border-bottom: 2px solid #D4AF37; padding: 8px 0; font-size: 12px; }
+    td { padding: 8px 0; border-bottom: 1px dashed #E5E7EB; font-size: 13px; }
+    .total-row { font-weight: bold; font-size: 16px; border-top: 2px solid #2D1810; }
+    .print-btn { display: block; width: 100%; padding: 12px; background: #2D1810; color: #D4AF37; font-weight: bold; border: none; border-radius: 8px; margin-top: 20px; cursor: pointer; }
+    @media print { .print-btn { display: none; } body { border: none; } }
+  </style>
+</head>
+<body>
+  <div style="text-align: center;">
+    <h2 style="margin: 0; color: #2D1810; font-family: serif;">FRENCHBELL CAFE</h2>
+    <p style="font-size: 12px; color: #6B7280; margin: 4px 0;">Official Tax Invoice & Receipt</p>
+    ${isSimulated ? '<div class="badge simulated" style="margin: 6px 0;">TEST / SIMULATED PAYMENT</div>' : ''}
+  </div>
+
+  <div style="margin-top: 16px; font-size: 12px; line-height: 1.6;">
+    <div><strong>Order No:</strong> #${order.order_number}</div>
+    <div><strong>Date:</strong> ${new Date(order.created_at).toLocaleString()}</div>
+    <div><strong>Customer:</strong> ${order.customer_name} (+91 ${order.phone})</div>
+    <div><strong>Order Mode:</strong> <span style="text-transform: uppercase;">${order.order_type}</span></div>
+    <div><strong>Payment Status:</strong> <span class="badge ${order.payment_status === 'successful' || order.payment_status === 'paid' ? 'paid' : 'simulated'}">${order.payment_status.toUpperCase()}</span></div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Item</th>
+        <th style="text-align: center;">Qty</th>
+        <th style="text-align: right;">Price</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${items.map(it => `
+        <tr>
+          <td>${it.item_name} ${it.variant ? `(${it.variant})` : ''}</td>
+          <td style="text-align: center;">${it.quantity}</td>
+          <td style="text-align: right;">₹${Number(it.total_price).toFixed(2)}</td>
+        </tr>
+      `).join('')}
+    </tbody>
+  </table>
+
+  <div style="margin-top: 16px; font-size: 13px; line-height: 1.8;">
+    <div style="display: flex; justify-content: space-between;"><span>Subtotal:</span><span>₹${Number(order.subtotal).toFixed(2)}</span></div>
+    ${Number(order.discount) > 0 ? `<div style="display: flex; justify-content: space-between; color: #059669;"><span>Discount:</span><span>-₹${Number(order.discount).toFixed(2)}</span></div>` : ''}
+    ${Number(order.delivery_charge) > 0 ? `<div style="display: flex; justify-content: space-between;"><span>Delivery Fee:</span><span>₹${Number(order.delivery_charge).toFixed(2)}</span></div>` : ''}
+    ${Number(order.tax) > 0 ? `<div style="display: flex; justify-content: space-between;"><span>GST Tax:</span><span>₹${Number(order.tax).toFixed(2)}</span></div>` : ''}
+    <div class="total-row" style="display: flex; justify-content: space-between; margin-top: 8px; padding-top: 8px;">
+      <span>Total Paid:</span>
+      <span>₹${Number(order.total).toFixed(2)}</span>
+    </div>
+  </div>
+
+  <div style="text-align: center; margin-top: 24px; font-size: 13px; font-style: italic; color: #8B5A2B;">
+    Ding. Eat. Repeat. Thank You!
+  </div>
+
+  <button class="print-btn" onclick="window.print()">Print / Save as PDF</button>
+</body>
+</html>`;
+
+    res.setHeader('Content-Type', 'text/html');
+    res.send(html);
+  } catch (err) {
+    res.status(500).send('<h2>Error Generating Receipt</h2>');
+  }
+});
+
+// Configured Receipt Dispatch Endpoint (WhatsApp / SMS provider abstraction)
+app.post('/api/receipts/:orderNumber/dispatch', async (req, res) => {
+  try {
+    const { orderNumber } = req.params;
+    const result = await ReceiptDeliveryService.dispatchReceipt(orderNumber);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// WhatsApp link generator (for manual customer click or chat open)
+app.post('/api/receipts/whatsapp', async (req, res) => {
+  try {
+    const { order_number, orderNumber, phone } = req.body;
+    const targetOrderNumber = order_number || orderNumber;
+    const db = await getDb();
+    const order = await db.get('SELECT * FROM orders WHERE order_number = ?', [targetOrderNumber]);
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+
+    const targetPhone = phone || order.phone;
+    const cleanPhone = normalizePhone(targetPhone);
+
+    const message = encodeURIComponent(`FrenchBell Cafe Order #${order.order_number}\nAmount: ₹${order.total}\nStatus: ${order.order_status}\nView receipt: ${getBaseUrl(req)}/api/receipts/${order.order_number}/download`);
+    const whatsappLink = `https://wa.me/91${cleanPhone}?text=${message}`;
+
+    res.json({
+      success: true,
+      whatsapp_link: whatsappLink,
+      phone: cleanPhone,
+      message: 'WhatsApp message link generated'
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// =================== 9. CUSTOMERS DIRECTORY ===================
 
 app.get('/api/customers', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const db = await getDb();
-    const store = db.getStore();
 
-    const customerMap = new Map();
+    // Query aggregated customer orders from database
+    const customers = await db.all(`
+      SELECT
+        u.id,
+        u.name,
+        u.phone,
+        u.created_at as registered_at,
+        COUNT(o.id) as total_orders,
+        COALESCE(SUM(o.total), 0) as total_spending,
+        MAX(o.created_at) as last_order_date
+      FROM users u
+      LEFT JOIN orders o ON (o.user_id = u.id OR o.phone = u.phone)
+      WHERE u.role = 'customer'
+      GROUP BY u.id, u.name, u.phone, u.created_at
+      ORDER BY total_spending DESC
+    `);
 
-    // Aggregate from orders
-    for (const order of store.orders || []) {
-      const phone = order.phone;
-      if (!phone) continue;
-
-      if (!customerMap.has(phone)) {
-        const user = store.users.find(u => u.phone === phone);
-        customerMap.set(phone, {
-          phone,
-          name: order.customer_name || user?.name || 'Valued Foodie',
-          registered_at: user?.created_at || order.created_at,
-          total_orders: 0,
-          total_spending: 0,
-          last_order_date: order.created_at,
-          order_history: []
-        });
-      }
-
-      const c = customerMap.get(phone);
-      c.total_orders += 1;
-      c.total_spending += Number(order.total || 0);
+    for (const c of customers) {
+      c.total_orders = parseInt(c.total_orders || '0', 10);
+      c.total_spending = parseFloat(c.total_spending || '0');
       c.total_spent = c.total_spending;
-      if (new Date(order.created_at) > new Date(c.last_order_date)) {
-        c.last_order_date = order.created_at;
-      }
-      
-      const orderItems = (store.order_items || []).filter(item => item.order_id === order.id);
-      c.order_history.push({
-        id: order.id,
-        order_number: order.order_number,
-        order_type: order.order_type,
-        total: order.total,
-        order_status: order.order_status,
-        created_at: order.created_at,
-        items: orderItems.length > 0 ? orderItems : (order.items || [])
-      });
+      c.order_history = await db.all('SELECT * FROM orders WHERE user_id = ? OR phone = ? ORDER BY created_at DESC LIMIT 5', [c.id, c.phone]);
       c.orders = c.order_history;
     }
 
-    // Add registered customers who haven't ordered yet
-    for (const user of store.users || []) {
-      if (user.role === 'customer' && user.phone && !customerMap.has(user.phone)) {
-        customerMap.set(user.phone, {
-          phone: user.phone,
-          name: user.name,
-          registered_at: user.created_at,
-          total_orders: 0,
-          total_spending: 0,
-          total_spent: 0,
-          last_order_date: null,
-          order_history: [],
-          orders: [],
-          preferred_order_type: 'takeaway'
-        });
-      }
-    }
-
-    // Determine preferred_order_type for all customers
-    for (const c of customerMap.values()) {
-      if (c.order_history.length > 0) {
-        const typeCounts = {};
-        for (const o of c.order_history) {
-          typeCounts[o.order_type] = (typeCounts[o.order_type] || 0) + 1;
-        }
-        c.preferred_order_type = Object.keys(typeCounts).sort((a,b) => typeCounts[b] - typeCounts[a])[0] || 'takeaway';
-      }
-      c.total_spent = c.total_spending;
-      c.orders = c.order_history;
-    }
-
-    const customers = Array.from(customerMap.values()).sort((a, b) => b.total_spending - a.total_spending);
     res.json(customers);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// =================== 9. OFFERS & COUPONS ===================
+// =================== 10. OFFERS & COUPONS ===================
 
 app.get('/api/offers', async (req, res) => {
   try {
     const db = await getDb();
-    const offers = await db.all('SELECT * FROM offers');
+    const offers = await db.all('SELECT * FROM offers ORDER BY id ASC');
     res.json(offers);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1786,23 +1876,23 @@ app.post('/api/offers/generate-code', authenticateToken, requireAdmin, async (re
 
 app.post('/api/offers', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const { title, description, coupon_code, discount_type, discount_value, minimum_order, max_discount, valid_from, valid_until, applicable_order_type, usage_limit, per_customer_limit, active } = req.body;
+    const { title, description, coupon_code, discount_type, discount_value, minimum_order, max_discount, valid_from, valid_until, applicable_order_type, active } = req.body;
     if (!title || !coupon_code || !discount_value) {
-      return res.status(400).json({ error: 'Title, coupon code, and discount value are required' });
+      return res.status(400).json({ error: 'Title, coupon code, and discount value are required.' });
     }
 
     const cleanCode = coupon_code.trim().toUpperCase();
     const db = await getDb();
-    const store = db.getStore();
 
-    if ((store.offers || []).some(o => o.coupon_code === cleanCode)) {
+    const existing = await db.get('SELECT * FROM offers WHERE UPPER(coupon_code) = ?', [cleanCode]);
+    if (existing) {
       return res.status(400).json({ error: `Coupon code "${cleanCode}" already exists.` });
     }
 
     await db.run(`
-      INSERT INTO offers (title, description, coupon_code, discount_type, discount_value, minimum_order, max_discount, valid_from, valid_until, applicable_order_type, usage_limit, per_customer_limit, active)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [title, description, cleanCode, discount_type || 'percentage', discount_value, minimum_order || 0, max_discount || null, valid_from || null, valid_until || null, applicable_order_type || 'all', usage_limit || null, per_customer_limit || 1, active !== undefined ? (active ? 1 : 0) : 1]);
+      INSERT INTO offers (title, description, coupon_code, discount_type, discount_value, minimum_order, max_discount, valid_from, valid_until, applicable_order_type, active)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [title, description, cleanCode, discount_type || 'percentage', discount_value, minimum_order || 0, max_discount || null, valid_from || null, valid_until || null, applicable_order_type || 'all', active !== undefined ? (active ? 1 : 0) : 1]);
 
     await db.logActivity({
       adminId: req.user.id,
@@ -1841,83 +1931,13 @@ app.delete('/api/offers/:id', authenticateToken, requireAdmin, async (req, res) 
   }
 });
 
-// Update/Edit existing offer/coupon
-app.put('/api/offers/:id', authenticateToken, requireAdmin, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const db = await getDb();
-    const store = db.getStore();
-    const offer = (store.offers || []).find(o => o.id == id);
-    if (!offer) return res.status(404).json({ error: 'Coupon not found' });
-
-    const {
-      title, description, coupon_code, discount_type, discount_value,
-      minimum_order, max_discount, valid_from, valid_until,
-      applicable_order_type, usage_limit, per_customer_limit, active
-    } = req.body;
-
-    if (coupon_code && coupon_code.toUpperCase() !== offer.coupon_code) {
-      const cleanCode = coupon_code.trim().toUpperCase();
-      if ((store.offers || []).some(o => o.id != id && o.coupon_code === cleanCode)) {
-        return res.status(400).json({ error: `Coupon code "${cleanCode}" already exists.` });
-      }
-      offer.coupon_code = cleanCode;
-    }
-
-    if (title !== undefined) offer.title = title;
-    if (description !== undefined) offer.description = description;
-    if (discount_type !== undefined) offer.discount_type = discount_type;
-    if (discount_value !== undefined) offer.discount_value = Number(discount_value);
-    if (minimum_order !== undefined) offer.minimum_order = Number(minimum_order) || 0;
-    if (max_discount !== undefined) offer.max_discount = max_discount ? Number(max_discount) : null;
-    if (valid_from !== undefined) offer.valid_from = valid_from || null;
-    if (valid_until !== undefined) offer.valid_until = valid_until || null;
-    if (applicable_order_type !== undefined) offer.applicable_order_type = applicable_order_type || 'all';
-    if (usage_limit !== undefined) offer.usage_limit = usage_limit ? Number(usage_limit) : null;
-    if (per_customer_limit !== undefined) offer.per_customer_limit = per_customer_limit ? Number(per_customer_limit) : 1;
-    if (active !== undefined) offer.active = active ? 1 : 0;
-
-    db.save();
-
-    await db.logActivity({
-      adminId: req.user.id,
-      adminEmail: req.user.email,
-      adminName: req.user.name,
-      action: 'Updated Coupon',
-      entity: 'coupon',
-      entityId: offer.coupon_code,
-      details: `Updated coupon ${offer.coupon_code}`
-    });
-
-    res.json({ success: true, offer, message: 'Coupon updated successfully' });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// =================== 10. ADVERTISEMENTS & BANNERS ===================
+// =================== 11. ADVERTISEMENTS ===================
 
 app.get('/api/advertisements', async (req, res) => {
   try {
     const db = await getDb();
-    const ads = await db.all('SELECT * FROM advertisements');
-    const now = new Date();
-
-    // Check expiration on advertisements
-    const processed = ads.map(a => {
-      let isExpired = false;
-      if (a.end_date) {
-        const end = new Date(a.end_date);
-        if (now > end) isExpired = true;
-      }
-      return {
-        ...a,
-        is_expired: isExpired,
-        active: isExpired ? 0 : a.active
-      };
-    });
-
-    res.json(processed);
+    const ads = await db.all('SELECT * FROM advertisements ORDER BY id ASC');
+    res.json(ads);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1931,7 +1951,7 @@ app.post('/api/advertisements', authenticateToken, requireAdmin, async (req, res
     await db.run(`
       INSERT INTO advertisements (title, image_url, description, cta, start_date, end_date, active)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `, [title, image_url, description, cta || 'Order Now', start_date || null, end_date || null, active !== undefined ? (active ? 1 : 0) : 1]);
+    `, [title, image_url || '/assets/food/burger.jpg', description, cta || 'Order Now', start_date || null, end_date || null, active !== undefined ? (active ? 1 : 0) : 1]);
 
     await db.logActivity({
       adminId: req.user.id,
@@ -1943,41 +1963,6 @@ app.post('/api/advertisements', authenticateToken, requireAdmin, async (req, res
     });
 
     res.json({ message: 'Advertisement created' });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Update/Edit Advertisement
-app.put('/api/advertisements/:id', authenticateToken, requireAdmin, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const db = await getDb();
-    const store = db.getStore();
-    const ad = (store.advertisements || []).find(a => a.id == id);
-    if (!ad) return res.status(404).json({ error: 'Advertisement not found' });
-
-    const { title, image_url, description, cta, start_date, end_date, active } = req.body;
-    if (title !== undefined) ad.title = title;
-    if (image_url !== undefined) ad.image_url = image_url;
-    if (description !== undefined) ad.description = description;
-    if (cta !== undefined) ad.cta = cta;
-    if (start_date !== undefined) ad.start_date = start_date || null;
-    if (end_date !== undefined) ad.end_date = end_date || null;
-    if (active !== undefined) ad.active = active ? 1 : 0;
-    db.save();
-
-    await db.logActivity({
-      adminId: req.user.id,
-      adminEmail: req.user.email,
-      adminName: req.user.name,
-      action: 'Updated Advertisement',
-      entity: 'advertisement',
-      entityId: id,
-      details: `Updated advertisement "${ad.title}"`
-    });
-
-    res.json({ success: true, advertisement: ad, message: 'Advertisement updated successfully' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1995,7 +1980,7 @@ app.delete('/api/advertisements/:id', authenticateToken, requireAdmin, async (re
       action: 'Deleted Banner',
       entity: 'advertisement',
       entityId: req.params.id,
-      details: `Removed advertisement #${req.params.id}`
+      details: `Removed banner #${req.params.id}`
     });
 
     res.json({ message: 'Advertisement deleted' });
@@ -2004,416 +1989,159 @@ app.delete('/api/advertisements/:id', authenticateToken, requireAdmin, async (re
   }
 });
 
-// =================== 11. DINE-IN TABLES & QR CODES ===================
+// =================== 12. DINE-IN TABLES & QR CODES ===================
 
 app.get('/api/tables', async (req, res) => {
   try {
-    const baseUrl = getBaseUrl(req);
     const db = await getDb();
-    const store = db.getStore();
+    const baseUrl = getBaseUrl(req);
 
-    if (!store.tables || store.tables.length === 0) {
-      store.tables = [];
+    let tables = await db.all('SELECT * FROM tables ORDER BY table_number ASC');
+
+    if (!tables || tables.length === 0) {
       for (let t = 1; t <= 12; t++) {
         const tableNum = String(t).padStart(2, '0');
-        store.tables.push({
-          id: t,
-          table_number: tableNum,
-          name: `Table #${tableNum}`,
-          capacity: t <= 4 ? 2 : (t <= 8 ? 4 : 6),
-          status: 'active',
-          qr_url: `${baseUrl}/?table=${tableNum}&mode=dine-in`
-        });
+        await db.run(`
+          INSERT INTO tables (table_number, name, capacity, status, qr_url)
+          VALUES (?, ?, ?, 'active', ?)
+          ON CONFLICT (table_number) DO NOTHING
+        `, [tableNum, `Table #${tableNum}`, t <= 4 ? 2 : (t <= 8 ? 4 : 6), `${baseUrl}/?table=${tableNum}&mode=dine-in`]);
       }
-      db.save();
+      tables = await db.all('SELECT * FROM tables ORDER BY table_number ASC');
     }
 
-    res.json(store.tables);
+    res.json(tables);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-app.post('/api/tables', authenticateToken, requireAdmin, async (req, res) => {
-  try {
-    const { table_number, name, capacity, status } = req.body;
-    const db = await getDb();
-    const store = db.getStore();
-    const baseUrl = getBaseUrl(req);
-
-    const id = store.tables.length ? Math.max(...store.tables.map(t => t.id || 0)) + 1 : 1;
-    const cleanNum = String(table_number || id).padStart(2, '0');
-    const newTable = {
-      id,
-      table_number: cleanNum,
-      name: name || `Table #${cleanNum}`,
-      capacity: Number(capacity) || 4,
-      status: status || 'active',
-      qr_url: `${baseUrl}/?table=${cleanNum}&mode=dine-in`
-    };
-
-    store.tables.push(newTable);
-    db.save();
-
-    await db.logActivity({
-      adminId: req.user.id,
-      adminEmail: req.user.email,
-      adminName: req.user.name,
-      action: 'Added Dine-In Table',
-      entity: 'table',
-      entityId: cleanNum,
-      details: `Added Table #${cleanNum}`
-    });
-
-    res.json({ success: true, table: newTable });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// =================== 12. PAYMENTS & TRANSACTIONS ===================
+// =================== 13. PAYMENTS & TRANSACTIONS ===================
 
 app.get('/api/payments', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const db = await getDb();
-    const store = db.getStore();
-    const payments = (store.payments || []).map(p => {
-      const order = store.orders.find(o => o.id == p.order_id);
-      return {
-        ...p,
-        order_number: order ? order.order_number : 'N/A',
-        customer_name: order ? order.customer_name : 'Customer',
-        phone: order ? order.phone : 'N/A',
-        order_type: order ? order.order_type : 'takeaway'
-      };
-    }).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-
+    const payments = await db.all(`
+      SELECT p.*, o.order_number, o.customer_name, o.phone, o.order_type
+      FROM payments p
+      LEFT JOIN orders o ON p.order_id = o.id
+      ORDER BY p.created_at DESC
+    `);
     res.json(payments);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Server-Side Payment Verification
-app.post('/api/payment/verify', async (req, res) => {
+// =================== 14. ADMIN ACTIVITY LOGS & AUDIT TRAIL ===================
+
+app.get('/api/admin/activity-logs', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const { order_id, order_number, transaction_id, payment_method, amount } = req.body;
     const db = await getDb();
+    const { action, admin_id, admin_email, entity, search, start_date, end_date, limit = 100 } = req.query;
 
-    let order = null;
-    if (order_number) {
-      order = await db.get('SELECT * FROM orders WHERE order_number = ?', [order_number]);
-    } else if (order_id) {
-      order = await db.get('SELECT * FROM orders WHERE id = ?', [order_id]);
+    let query = 'SELECT * FROM activity_logs WHERE 1=1';
+    const params = [];
+
+    if (action && action !== 'all') {
+      params.push(`%${action.toLowerCase()}%`);
+      query += ` AND LOWER(action) LIKE $${params.length}`;
     }
 
-    if (!order) return res.status(404).json({ error: 'Order not found for payment verification' });
-
-    if (amount !== undefined && Math.abs(Number(order.total) - Number(amount)) > 1) {
-      return res.status(400).json({ error: 'Payment amount mismatch detected. Order not verified.' });
+    if (admin_id) {
+      params.push(admin_id);
+      query += ` AND admin_id = $${params.length}`;
     }
 
-    const txnId = transaction_id || `TXN_${Date.now()}_${Math.floor(100 + Math.random() * 900)}`;
+    if (admin_email) {
+      params.push(admin_email.toLowerCase());
+      query += ` AND LOWER(admin_email) = $${params.length}`;
+    }
 
-    await db.run('UPDATE orders SET payment_status = ?, order_status = ? WHERE id = ?', ['paid', 'accepted', order.id]);
-    await db.run(`
-      INSERT INTO payments (order_id, transaction_id, amount, method, status)
-      VALUES (?, ?, ?, ?, 'paid')
-    `, [order.id, txnId, order.total, payment_method || 'upi']);
-    await db.run('UPDATE receipts SET whatsapp_status = "sent" WHERE order_id = ?', [order.id]);
+    if (entity && entity !== 'all') {
+      params.push(entity.toLowerCase());
+      query += ` AND LOWER(entity) = $${params.length}`;
+    }
 
-    const updatedOrder = await db.get('SELECT * FROM orders WHERE id = ?', [order.id]);
-    updatedOrder.items = await db.all('SELECT * FROM order_items WHERE order_id = ?', [order.id]);
+    if (start_date) {
+      params.push(new Date(start_date));
+      query += ` AND created_at >= $${params.length}`;
+    }
 
-    res.json({
-      success: true,
-      verified: true,
-      transaction_id: txnId,
-      order: updatedOrder,
-      receipt_url: `/api/receipts/${order.order_number}/download`,
-      message: 'Payment verified successfully by server'
-    });
+    if (end_date) {
+      params.push(new Date(end_date));
+      query += ` AND created_at <= $${params.length}`;
+    }
+
+    if (search && search.trim()) {
+      const searchVal = `%${search.trim().toLowerCase()}%`;
+      params.push(searchVal);
+      const idx = params.length;
+      query += ` AND (LOWER(details) LIKE $${idx} OR LOWER(action) LIKE $${idx} OR LOWER(admin_name) LIKE $${idx} OR LOWER(reason) LIKE $${idx})`;
+    }
+
+    query += ' ORDER BY created_at DESC';
+
+    const pageLimit = Math.min(500, parseInt(limit, 10) || 50);
+    const pageOffset = Math.max(0, parseInt(req.query.offset, 10) || 0);
+
+    // Count query — same filters, no ORDER/LIMIT/OFFSET
+    const countQuery = query.replace('SELECT * FROM activity_logs', 'SELECT COUNT(*) as total FROM activity_logs').replace(/\s+ORDER\s+BY.*$/i, '');
+
+    params.push(pageLimit);
+    query += ` LIMIT $${params.length}`;
+    params.push(pageOffset);
+    query += ` OFFSET $${params.length}`;
+
+    const countParams = params.slice(0, params.length - 2);
+    const [logs, countRow] = await Promise.all([
+      db.all(query, params),
+      db.get(countQuery, countParams)
+    ]);
+
+    const total = parseInt(countRow?.total || '0', 10);
+    res.json({ logs, total, page: Math.floor(pageOffset / pageLimit) + 1, limit: pageLimit });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// =================== 13. DIGITAL RECEIPTS & WHATSAPP ===================
 
-app.get('/api/receipts/:orderNumber/download', async (req, res) => {
+// =================== 15. INVENTORY & STOCK ===================
+
+app.get('/api/inventory', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const { orderNumber } = req.params;
     const db = await getDb();
-    const order = await db.get('SELECT * FROM orders WHERE order_number = ? OR id = ?', [orderNumber, orderNumber]);
-    if (!order) return res.status(404).send('<h2>Receipt Not Found</h2>');
-
-    const items = await db.all('SELECT * FROM order_items WHERE order_id = ?', [order.id]);
-    const settingsRows = await db.all('SELECT * FROM settings');
-    const settings = {};
-    for (const r of settingsRows) settings[r.key] = r.value;
-
-    const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Receipt - FrenchBell Cafe #${order.order_number}</title>
-  <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #faf5ed; color: #1f110a; margin: 0; padding: 24px; }
-    .receipt { max-width: 480px; margin: 0 auto; background: #fffdf9; border: 2px solid #d4af37; border-radius: 20px; padding: 32px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); }
-    .header { text-align: center; border-bottom: 1px solid #d4af37; padding-bottom: 20px; margin-bottom: 20px; }
-    .header h1 { margin: 0; font-family: serif; color: #1f110a; font-size: 26px; }
-    .header p { margin: 4px 0 0; font-size: 12px; color: #6b584e; }
-    .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 13px; background: #faf5ed; padding: 12px; border-radius: 12px; margin-bottom: 20px; }
-    .meta span { color: #6b584e; }
-    .meta strong { color: #1f110a; }
-    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 13px; }
-    th { text-align: left; border-bottom: 1px solid #e0d5c1; padding: 8px 4px; color: #6b584e; font-size: 11px; text-transform: uppercase; }
-    td { padding: 10px 4px; border-bottom: 1px solid #f0e6d6; }
-    .text-right { text-align: right; }
-    .totals { border-top: 1px solid #d4af37; padding-top: 12px; font-size: 13px; }
-    .totals .row { display: flex; justify-content: space-between; margin-bottom: 6px; }
-    .grand-total { font-size: 18px; font-weight: bold; color: #1f110a; border-top: 1px solid #e0d5c1; padding-top: 8px; margin-top: 8px; }
-    .footer-note { text-align: center; margin-top: 24px; font-size: 12px; color: #8b5a2b; font-style: italic; }
-    .btn-print { display: block; width: 100%; padding: 12px; background: #1f110a; color: #d4af37; border: none; border-radius: 9999px; font-weight: bold; cursor: pointer; margin-top: 20px; text-align: center; font-size: 14px; text-transform: uppercase; }
-    @media print { .btn-print { display: none; } body { padding: 0; background: #fff; } .receipt { box-shadow: none; border: 1px solid #ccc; } }
-  </style>
-</head>
-<body>
-  <div class="receipt">
-    <div class="header">
-      <h1>FrenchBell Cafe</h1>
-      <p>${settings.cafe_address || 'K. Narayanpura, Bengaluru – 560077, Karnataka'}</p>
-      <p>Phone: ${settings.cafe_phone || '+91 98765 43210'} | Tax Invoice</p>
-    </div>
-    <div class="meta">
-      <div><span>Order ID:</span> <strong>#${order.order_number}</strong></div>
-      <div><span>Order Type:</span> <strong>${(order.order_type || 'Takeaway').toUpperCase()}</strong></div>
-      <div><span>Customer:</span> <strong>${order.customer_name}</strong></div>
-      <div><span>Phone:</span> <strong>+91 ${order.phone}</strong></div>
-      <div><span>Date:</span> <strong>${new Date(order.created_at || Date.now()).toLocaleDateString()}</strong></div>
-      <div><span>Payment:</span> <strong style="color:#10b981;">PAID (${(order.payment_method || 'UPI').toUpperCase()})</strong></div>
-    </div>
-    <table>
-      <thead>
-        <tr><th>Item</th><th class="text-right">Qty</th><th class="text-right">Price</th><th class="text-right">Total</th></tr>
-      </thead>
-      <tbody>
-        ${items.map(it => `<tr>
-          <td>${it.item_name} ${it.variant ? `(${it.variant})` : ''}</td>
-          <td class="text-right">${it.quantity}</td>
-          <td class="text-right">₹${it.unit_price}</td>
-          <td class="text-right">₹${it.total_price}</td>
-        </tr>`).join('')}
-      </tbody>
-    </table>
-    <div class="totals">
-      <div class="row"><span>Subtotal</span><span>₹${order.subtotal || order.total}</span></div>
-      ${order.discount > 0 ? `<div class="row" style="color:#10b981;"><span>Coupon Discount</span><span>-₹${order.discount}</span></div>` : ''}
-      ${order.delivery_charge > 0 ? `<div class="row"><span>Delivery Fee</span><span>₹${order.delivery_charge}</span></div>` : ''}
-      <div class="row grand-total"><span>Total Paid</span><span>₹${Number(order.total).toFixed(2)}</span></div>
-    </div>
-    ${order.special_instructions ? `<p style="font-size:12px;color:#6b584e;margin-top:12px;"><strong>Instructions:</strong> ${order.special_instructions}</p>` : ''}
-    <div class="footer-note">Good Food, Great Moments. Thank you for dining with FrenchBell Cafe!</div>
-    <button class="btn-print" onclick="window.print()">Print / Save PDF</button>
-  </div>
-</body>
-</html>`;
-
-    res.setHeader('Content-Type', 'text/html');
-    res.send(html);
-  } catch (err) {
-    res.status(500).send('Error generating receipt');
-  }
-});
-
-// WhatsApp Receipt Dispatcher
-app.post('/api/receipts/whatsapp', async (req, res) => {
-  try {
-    const { order_number, phone } = req.body;
-    const db = await getDb();
-    const order = await db.get('SELECT * FROM orders WHERE order_number = ?', [order_number]);
-    if (!order) return res.status(404).json({ error: 'Order not found' });
-
-    const baseUrl = getBaseUrl(req);
-    const receiptUrl = `${baseUrl}/api/receipts/${order.order_number}/download`;
-
-    await db.run('UPDATE receipts SET whatsapp_status = "link_generated" WHERE order_id = ?', [order.id]);
-
-    const targetPhone = phone || order.phone || '';
-    const digits = String(targetPhone).replace(/\D/g, '');
-    const cleanPhone = digits.length === 10 ? `91${digits}` : digits;
-
-    const waText = encodeURIComponent(
-      `🔔 *FrenchBell Cafe - Order Receipt #${order.order_number}*\n\n` +
-      `Hello ${order.customer_name},\nThank you for ordering with us!\n\n` +
-      `*Order Type:* ${order.order_type.toUpperCase()}\n` +
-      `*Total Paid:* ₹${order.total}\n` +
-      `*Receipt:* ${receiptUrl}\n\n` +
-      `_Good Food, Great Moments!_`
-    );
-
-    const waLink = cleanPhone ? `https://wa.me/${cleanPhone}?text=${waText}` : null;
-
-    res.json({
-      success: true,
-      order_number: order.order_number,
-      phone: cleanPhone,
-      receipt_url: receiptUrl,
-      whatsapp_link: waLink,
-      message: cleanPhone ? `WhatsApp receipt link generated for +${cleanPhone}` : 'Receipt link ready'
-    });
+    const items = await db.all('SELECT * FROM inventory ORDER BY id ASC');
+    res.json(items);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// =================== 14. ANALYTICS & EXPORT ===================
+// =================== 16. ADMIN NOTIFICATIONS ===================
 
-app.get('/api/analytics/summary', authenticateToken, requireAdmin, async (req, res) => {
+app.get('/api/admin/notifications', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const db = await getDb();
-    const store = db.getStore();
-    const orders = store.orders || [];
-    const nonCancelled = orders.filter(o => o.order_status !== 'cancelled');
-
-    const totalRevenue = nonCancelled.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
-    const totalOrders = nonCancelled.length;
-    const avgOrder = totalOrders ? Math.round(totalRevenue / totalOrders) : 0;
-    const uniquePhones = new Set(orders.map(o => o.phone).filter(Boolean)).size;
-
-    // Order type breakdowns
-    const dineInOrders = orders.filter(o => o.order_type === 'dine-in').length;
-    const takeawayOrders = orders.filter(o => o.order_type === 'takeaway').length;
-    const deliveryOrders = orders.filter(o => o.order_type === 'delivery').length;
-
-    // Popular items
-    const itemSales = {};
-    for (const item of store.order_items || []) {
-      const name = item.item_name;
-      if (!itemSales[name]) itemSales[name] = { name, quantity: 0, revenue: 0 };
-      itemSales[name].quantity += Number(item.quantity || 1);
-      itemSales[name].revenue += Number(item.total_price || item.unit_price * item.quantity);
-    }
-    const popularItems = Object.values(itemSales).sort((a, b) => b.revenue - a.revenue).slice(0, 5);
-
-    // Inventory alerts
-    const lowStockItems = (store.menu_items || []).filter(i => i.available !== 0 && i.stock_quantity !== undefined && Number(i.stock_quantity) > 0 && Number(i.stock_quantity) <= 5);
-    const outOfStockItems = (store.menu_items || []).filter(i => i.available === 0 || (i.stock_quantity !== undefined && Number(i.stock_quantity) <= 0));
-
-    // Time-series sales graphs
-    const now = new Date();
-    
-    // Today's hourly breakdown (2-hour slots: 11 AM - 11 PM)
-    const timeSlots = ['11:00 AM', '01:00 PM', '03:00 PM', '05:00 PM', '07:00 PM', '09:00 PM', '11:00 PM'];
-    const todaySales = timeSlots.map((slot, idx) => {
-      const hourStart = 11 + (idx * 2);
-      const ordersInSlot = orders.filter(o => {
-        if (!o.created_at || o.order_status === 'cancelled') return false;
-        const d = new Date(o.created_at);
-        const h = d.getHours();
-        return h >= hourStart && h < hourStart + 2;
-      });
-      const rev = ordersInSlot.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
-      return {
-        date: slot,
-        revenue: rev,
-        orders: ordersInSlot.length
-      };
-    });
-
-    // Weekly breakdown (Last 7 days)
-    const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const weeklySales = [];
-    for (let i = 6; i >= 0; i--) {
-      const targetDate = new Date();
-      targetDate.setDate(now.getDate() - i);
-      const dayName = daysOfWeek[targetDate.getDay()];
-      const dateStr = targetDate.toISOString().slice(0, 10);
-      
-      const ordersOnDay = orders.filter(o => {
-        if (!o.created_at || o.order_status === 'cancelled') return false;
-        return o.created_at.slice(0, 10) === dateStr;
-      });
-      const dayRev = ordersOnDay.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
-      weeklySales.push({
-        date: dayName,
-        fullDate: dateStr,
-        revenue: dayRev,
-        orders: ordersOnDay.length
-      });
-    }
-
-    // Monthly breakdown (Last 4 weeks calculated from real orders)
-    const monthlySales = [];
-    for (let w = 3; w >= 0; w--) {
-      const startDay = new Date();
-      startDay.setDate(now.getDate() - (w + 1) * 7);
-      const endDay = new Date();
-      endDay.setDate(now.getDate() - w * 7);
-
-      const weekOrders = orders.filter(o => {
-        if (!o.created_at || o.order_status === 'cancelled') return false;
-        const d = new Date(o.created_at);
-        return d >= startDay && d < endDay;
-      });
-
-      monthlySales.push({
-        date: `Week ${4 - w}`,
-        revenue: weekOrders.reduce((sum, o) => sum + (Number(o.total) || 0), 0),
-        orders: weekOrders.length
-      });
-    }
-
-    // Count new customers (users created recently or unique customers)
-    const totalCustomersInDb = (store.users || []).filter(u => u.role === 'customer').length;
-    const newCustomersCount = Math.max(uniquePhones, totalCustomersInDb);
-
-    res.json({
-      today_revenue: totalRevenue,
-      total_orders: totalOrders,
-      pending_orders: orders.filter(o => ['received', 'new', 'preparing', 'accepted'].includes(o.order_status)).length,
-      completed_orders: orders.filter(o => o.order_status === 'completed').length,
-      cancelled_orders: orders.filter(o => o.order_status === 'cancelled').length,
-      dine_in_orders: dineInOrders,
-      takeaway_orders: takeawayOrders,
-      delivery_orders: deliveryOrders,
-      new_customers: newCustomersCount,
-      active_customers: uniquePhones,
-      average_order_value: avgOrder,
-      popular_items: popularItems,
-      low_stock_items: lowStockItems,
-      out_of_stock_items: outOfStockItems,
-      sales_graph: {
-        today: todaySales,
-        weekly: weeklySales,
-        monthly: monthlySales
-      },
-      current_business_day: getCafeBusinessDay(new Date())
-    });
+    const notifications = await db.all('SELECT * FROM admin_notifications ORDER BY created_at DESC LIMIT 50');
+    res.json(notifications);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-app.get('/api/analytics/export', authenticateToken, requireAdmin, async (req, res) => {
+app.put('/api/admin/notifications/mark-read', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const db = await getDb();
-    const orders = await db.all('SELECT * FROM orders');
-
-    let csvContent = 'Order Number,Created At,Customer Name,Phone,Type,Table,Total Amount,Payment Method,Status\n';
-    for (const o of orders) {
-      csvContent += `"${o.order_number}","${o.created_at}","${o.customer_name}","${o.phone}","${o.order_type}","${o.table_number || 'N/A'}",${o.total},"${o.payment_method}","${o.order_status}"\n`;
-    }
-
-    res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', 'attachment; filename=french_bell_sales_report.csv');
-    res.send(csvContent);
+    await db.run('UPDATE admin_notifications SET read = 1');
+    res.json({ success: true, message: 'All notifications marked as read' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// =================== 15. SETTINGS ===================
+// =================== 17. SETTINGS ===================
 
 app.get('/api/settings', async (req, res) => {
   try {
@@ -2432,7 +2160,11 @@ app.post('/api/settings', authenticateToken, requireAdmin, async (req, res) => {
     const db = await getDb();
     const settingsObj = req.body;
     for (const [key, value] of Object.entries(settingsObj)) {
-      await db.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', [key, typeof value === 'object' ? JSON.stringify(value) : String(value)]);
+      await db.run(`
+        INSERT INTO settings (key, value)
+        VALUES (?, ?)
+        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP
+      `, [key, typeof value === 'object' ? JSON.stringify(value) : String(value)]);
     }
 
     await db.logActivity({
@@ -2450,14 +2182,12 @@ app.post('/api/settings', authenticateToken, requireAdmin, async (req, res) => {
   }
 });
 
-if (!process.env.VERCEL) {
+if (!process.env.VERCEL && process.env.NODE_ENV !== 'test') {
   app.listen(PORT, async () => {
     console.log(`FrenchBell Cafe Operations Server running on port ${PORT}`);
-    const diag = emailService.getDiagnostics();
     console.log(`[Config] Loaded environment from: ${envPath} (exists: ${envExists})`);
-    console.log(`[Config] SMTP Provider: ${diag.provider}`);
-    console.log(`[Config] SMTP Server: ${diag.smtpHost}:${diag.smtpPort} (secure: ${diag.smtpSecure})`);
-    console.log(`[Config] SMTP Credentials configured: User=${diag.smtpUserConfigured}, Password=${diag.smtpPasswordConfigured}`);
+    console.log(`[Config] Test OTP Mode: ${isTestOtpMode ? `ACTIVE (Fixed test OTP: ${DEV_FIXED_OTP})` : 'DISABLED (Real SMS required)'}`);
+    console.log(`[Config] Database: PostgreSQL adapter ready`);
   });
 }
 

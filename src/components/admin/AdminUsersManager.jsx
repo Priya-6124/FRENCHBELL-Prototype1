@@ -3,7 +3,8 @@ import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
 import {
   Users, UserPlus, Mail, ShieldCheck, Clock, RefreshCw, XCircle,
-  AlertTriangle, Trash2, CheckCircle2, MoreVertical, Ban, Send, Eye
+  AlertTriangle, Trash2, CheckCircle2, MoreVertical, Ban, Send, Eye,
+  RotateCcw
 } from 'lucide-react';
 
 export default function AdminUsersManager() {
@@ -20,8 +21,11 @@ export default function AdminUsersManager() {
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteError, setInviteError] = useState('');
 
-  // Confirmation Modal State
+  // Confirmation Modal State (with Mandatory Reason support)
   const [confirmDialog, setConfirmDialog] = useState(null);
+  const [actionReason, setActionReason] = useState('');
+  const [reasonError, setReasonError] = useState('');
+  const [dialogLoading, setDialogLoading] = useState(false);
 
   // Fetch admin team & invitations
   const fetchAdminData = () => {
@@ -44,7 +48,7 @@ export default function AdminUsersManager() {
     fetchAdminData();
   }, [token]);
 
-  // Handle Send Invitation
+  // Handle Send Invitation (Supports multiple invitations to different emails)
   const handleSendInvite = async (e) => {
     e.preventDefault();
     setInviteError('');
@@ -62,7 +66,7 @@ export default function AdminUsersManager() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to send invitation');
 
-      addNotification('Invitation Sent', `Invitation sent to ${inviteEmail.trim()}`, 'success');
+      addNotification('Invitation Sent', `Invitation email dispatched to ${inviteEmail.trim()}`, 'success');
       setInviteEmail('');
       setShowInviteModal(false);
       fetchAdminData();
@@ -73,7 +77,7 @@ export default function AdminUsersManager() {
     }
   };
 
-  // Handle Resend Invitation
+  // Handle Resend Invitation (Rotates token and refreshes expiry)
   const handleResendInvite = async (invitationId, email) => {
     try {
       const res = await fetch(`/api/admin/invitations/${invitationId}/resend`, {
@@ -83,7 +87,7 @@ export default function AdminUsersManager() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to resend invitation');
 
-      addNotification('Invitation Resent', `Fresh invitation sent to ${email}`, 'success');
+      addNotification('Invitation Resent', `Rotated token and resent invitation to ${email}`, 'success');
       fetchAdminData();
     } catch (err) {
       addNotification('Error', err.message, 'error');
@@ -100,48 +104,98 @@ export default function AdminUsersManager() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to cancel invitation');
 
-      addNotification('Invitation Cancelled', `Pending invitation for ${email} cancelled`, 'info');
+      addNotification('Invitation Cancelled', `Pending invitation for ${email} has been cancelled`, 'info');
       fetchAdminData();
     } catch (err) {
       addNotification('Error', err.message, 'error');
-    }
-  };
-
-  // Handle Suspend Admin (With Last Admin Protection)
-  const handleToggleSuspend = async (admin) => {
-    try {
-      const res = await fetch(`/api/admin/users/${admin.id}/suspend`, {
-        method: 'PUT',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to update administrator status');
-
-      addNotification('Status Updated', data.message, 'info');
-      fetchAdminData();
-    } catch (err) {
-      addNotification('Action Prohibited', err.message, 'error');
     } finally {
       setConfirmDialog(null);
     }
   };
 
-  // Handle Remove Admin (With Last Admin Protection)
-  const handleRemoveAdmin = async (admin) => {
+  // Handle Suspend Admin (Requires mandatory reason)
+  const handleSuspendAdmin = async (admin, reason) => {
+    if (!reason || !reason.trim()) {
+      setReasonError('A mandatory reason is required to suspend an administrator.');
+      return;
+    }
+    setDialogLoading(true);
+    try {
+      const res = await fetch(`/api/admin/users/${admin.id}/suspend`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ reason: reason.trim() })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to suspend administrator');
+
+      addNotification('Account Suspended', data.message, 'info');
+      setConfirmDialog(null);
+      setActionReason('');
+      fetchAdminData();
+    } catch (err) {
+      setReasonError(err.message);
+    } finally {
+      setDialogLoading(false);
+    }
+  };
+
+  // Handle Restore Admin
+  const handleRestoreAdmin = async (admin) => {
+    setDialogLoading(true);
+    try {
+      const res = await fetch(`/api/admin/users/${admin.id}/restore`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ reason: actionReason.trim() || 'Access restored by administrator' })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to restore administrator');
+
+      addNotification('Access Restored', data.message, 'success');
+      setConfirmDialog(null);
+      setActionReason('');
+      fetchAdminData();
+    } catch (err) {
+      setReasonError(err.message);
+    } finally {
+      setDialogLoading(false);
+    }
+  };
+
+  // Handle Remove Admin (Requires mandatory reason, soft-deletes)
+  const handleRemoveAdmin = async (admin, reason) => {
+    if (!reason || !reason.trim()) {
+      setReasonError('A mandatory reason is required to remove an administrator.');
+      return;
+    }
+    setDialogLoading(true);
     try {
       const res = await fetch(`/api/admin/users/${admin.id}`, {
         method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ reason: reason.trim() })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to remove administrator');
 
       addNotification('Admin Removed', data.message, 'info');
+      setConfirmDialog(null);
+      setActionReason('');
       fetchAdminData();
     } catch (err) {
-      addNotification('Action Prohibited', err.message, 'error');
+      setReasonError(err.message);
     } finally {
-      setConfirmDialog(null);
+      setDialogLoading(false);
     }
   };
 
@@ -155,13 +209,13 @@ export default function AdminUsersManager() {
         <div>
           <div className="flex items-center gap-2 text-french-gold text-xs font-bold uppercase tracking-widest mb-1.5">
             <ShieldCheck className="w-4 h-4 text-french-gold" />
-            <span>Administrator Directory & Access</span>
+            <span>Administrator Directory & Team Access</span>
           </div>
           <h2 className="font-serif font-black text-2xl text-french-cream">
-            ADMIN USERS
+            ADMIN USERS & INVITATIONS
           </h2>
           <p className="text-xs text-french-cream/80 mt-1 max-w-xl">
-            Manage authorized cafe administrators. All active administrators share full operational access. Only existing administrators can invite new members.
+            Authorized cafe administrators with operational access. Existing administrators can invite additional members, resend or cancel invitations, and manage account statuses with mandatory audit reasons.
           </p>
         </div>
 
@@ -179,7 +233,7 @@ export default function AdminUsersManager() {
         <div className="p-5 border-b border-french-gold/20 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <h3 className="font-serif font-bold text-lg text-french-dark">
-              Active Administrators ({admins.length})
+              Administrators ({admins.length})
             </h3>
             <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-800 border border-emerald-500/30 uppercase">
               {activeAdminsCount} Active
@@ -226,6 +280,11 @@ export default function AdminUsersManager() {
                               (You)
                             </span>
                           )}
+                          {isSuspended && adm.suspend_reason && (
+                            <span className="text-[10px] text-red-600 block italic">
+                              Reason: {adm.suspend_reason}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </td>
@@ -250,35 +309,54 @@ export default function AdminUsersManager() {
                     </td>
 
                     <td className="p-4 text-right space-x-2">
-                      <button
-                        onClick={() => {
-                          setConfirmDialog({
-                            type: isSuspended ? 'unsuspend' : 'suspend',
-                            admin: adm,
-                            title: isSuspended ? `Reactivate ${adm.name}?` : `Suspend ${adm.name}?`,
-                            message: isSuspended
-                              ? `Are you sure you want to restore administrator access for ${adm.email}?`
-                              : `Are you sure you want to suspend administrator access for ${adm.email}? They will no longer be able to log in.`,
-                            onConfirm: () => handleToggleSuspend(adm)
-                          });
-                        }}
-                        className={`px-3 py-1 rounded-xl font-bold text-[11px] uppercase transition-all ${
-                          isSuspended
-                            ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                            : 'bg-amber-500/20 hover:bg-amber-500 text-amber-900 border border-amber-500/40'
-                        }`}
-                      >
-                        {isSuspended ? 'Reactivate' : 'Suspend'}
-                      </button>
+                      {isSuspended ? (
+                        <button
+                          onClick={() => {
+                            setActionReason('');
+                            setReasonError('');
+                            setConfirmDialog({
+                              type: 'restore',
+                              admin: adm,
+                              title: `Restore Access for ${adm.name}?`,
+                              message: `This will reactivate administrator permissions for ${adm.email}.`,
+                              requiresReason: false
+                            });
+                          }}
+                          className="px-3 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] uppercase transition-all shadow-sm"
+                        >
+                          Restore Access
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            setActionReason('');
+                            setReasonError('');
+                            setConfirmDialog({
+                              type: 'suspend',
+                              admin: adm,
+                              title: `Suspend Administrator ${adm.name}?`,
+                              message: `Immediately revokes login and administrative API permissions for ${adm.email}. A mandatory reason is required.`,
+                              requiresReason: true,
+                              reasonPlaceholder: 'e.g. Account audit, extended leave, security precaution...'
+                            });
+                          }}
+                          className="px-3 py-1 rounded-xl bg-amber-500/20 hover:bg-amber-500 text-amber-900 border border-amber-500/40 font-bold text-[11px] uppercase transition-all"
+                        >
+                          Suspend
+                        </button>
+                      )}
 
                       <button
                         onClick={() => {
+                          setActionReason('');
+                          setReasonError('');
                           setConfirmDialog({
                             type: 'remove',
                             admin: adm,
-                            title: `Remove Administrator ${adm.name}?`,
-                            message: `This will permanently delete ${adm.email} from administrator accounts. This action requires confirmation.`,
-                            onConfirm: () => handleRemoveAdmin(adm)
+                            title: `Deactivate Administrator ${adm.name}?`,
+                            message: `This will soft-delete ${adm.email} from active administrative personnel. Historical orders and audit logs will remain intact. A mandatory reason is required.`,
+                            requiresReason: true,
+                            reasonPlaceholder: 'e.g. Resigned from team, role decommissioned...'
                           });
                         }}
                         className="px-3 py-1 rounded-xl bg-red-500/10 hover:bg-red-600 text-red-600 hover:text-white font-bold text-[11px] uppercase transition-all border border-red-500/30"
@@ -304,13 +382,13 @@ export default function AdminUsersManager() {
             </h3>
           </div>
           <span className="text-xs text-french-muted">
-            Tokens expire automatically after 72 hours
+            Single-use cryptographic tokens with 72-hour validity
           </span>
         </div>
 
         {invitations.length === 0 ? (
           <div className="p-8 text-center text-french-muted text-xs">
-            No pending administrator invitations. Click "+ Invite Admin" above to send one.
+            No pending administrator invitations. Click "+ Invite Admin" above to invite team members.
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -319,7 +397,9 @@ export default function AdminUsersManager() {
                 <tr>
                   <th className="p-4">Invited Email</th>
                   <th className="p-4">Invited By</th>
-                  <th className="p-4">Sent At</th>
+                  <th className="p-4">Sent Date</th>
+                  <th className="p-4">Expiry Date</th>
+                  <th className="p-4">Last Resent</th>
                   <th className="p-4">Status</th>
                   <th className="p-4 text-right">Actions</th>
                 </tr>
@@ -335,31 +415,50 @@ export default function AdminUsersManager() {
                       {inv.invited_by_name || inv.invited_by || 'Admin'}
                     </td>
 
-                    <td className="p-4 text-french-muted">
+                    <td className="p-4 text-french-muted font-mono">
                       {new Date(inv.created_at).toLocaleDateString()}
                     </td>
 
+                    <td className="p-4 text-french-muted font-mono">
+                      {new Date(inv.expires_at).toLocaleDateString()}
+                    </td>
+
+                    <td className="p-4 text-french-muted font-mono">
+                      {inv.last_resent_at ? new Date(inv.last_resent_at).toLocaleDateString() : '—'}
+                    </td>
+
                     <td className="p-4">
-                      <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase bg-amber-500/20 text-amber-900 border border-amber-500/40 inline-flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-                        <span>Pending</span>
-                      </span>
+                      {inv.status === 'expired' || new Date(inv.expires_at) < new Date() ? (
+                        <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase bg-red-500/10 text-red-700 border border-red-500/30 inline-flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                          <span>Expired</span>
+                        </span>
+                      ) : (
+                        <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase bg-amber-500/20 text-amber-900 border border-amber-500/40 inline-flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                          <span>Pending</span>
+                        </span>
+                      )}
                     </td>
 
                     <td className="p-4 text-right space-x-2">
                       <button
                         onClick={() => handleResendInvite(inv.id, inv.email)}
                         className="px-3 py-1 rounded-xl bg-french-gold/20 hover:bg-french-gold hover:text-french-dark text-french-dark font-bold text-[11px] uppercase transition-all border border-french-gold/40"
+                        title="Rotate token and dispatch updated invitation email"
                       >
-                        Resend Invitation
+                        Resend
                       </button>
 
                       <button
                         onClick={() => {
+                          setActionReason('');
+                          setReasonError('');
                           setConfirmDialog({
                             type: 'cancel_invite',
                             title: `Cancel Invitation for ${inv.email}?`,
-                            message: `This will invalidate the invitation link sent to ${inv.email}.`,
+                            message: `This will invalidate the invitation link sent to ${inv.email}. The link can no longer be used.`,
+                            requiresReason: false,
                             onConfirm: () => handleCancelInvite(inv.id, inv.email)
                           });
                         }}
@@ -404,7 +503,7 @@ export default function AdminUsersManager() {
 
             <form onSubmit={handleSendInvite} className="space-y-4">
               <p className="text-xs text-french-cream/80 leading-relaxed">
-                Enter the personal email address of the person you wish to invite. A secure single-use invitation link with 72-hour validity will be sent directly to their email.
+                Enter the personal email address of the person you wish to invite. A single-use invitation link with 72-hour validity will be sent directly to their email.
               </p>
 
               <div>
@@ -448,12 +547,12 @@ export default function AdminUsersManager() {
         </div>
       )}
 
-      {/* Confirmation Dialog */}
+      {/* Confirmation & Reason Dialog */}
       {confirmDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-french-dark/85 backdrop-blur-md animate-fadeIn">
-          <div className="w-full max-w-sm bg-french-dark border-2 border-red-500/70 rounded-3xl p-6 shadow-2xl text-french-cream space-y-4">
-            <div className="flex items-center gap-3 text-red-400">
-              <AlertTriangle className="w-6 h-6 shrink-0" />
+          <div className="w-full max-w-md bg-french-dark border-2 border-french-gold/60 rounded-3xl p-6 sm:p-7 shadow-2xl text-french-cream space-y-4">
+            <div className="flex items-center gap-3 text-french-gold">
+              <AlertTriangle className="w-6 h-6 shrink-0 text-amber-400" />
               <h3 className="font-serif font-black text-lg text-french-cream">
                 {confirmDialog.title}
               </h3>
@@ -463,10 +562,36 @@ export default function AdminUsersManager() {
               {confirmDialog.message}
             </p>
 
+            {reasonError && (
+              <div className="p-3 rounded-xl bg-red-950/80 border border-red-500 text-red-200 text-xs font-semibold flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-red-400" />
+                <span>{reasonError}</span>
+              </div>
+            )}
+
+            {/* Mandatory Reason Input when applicable */}
+            {confirmDialog.requiresReason && (
+              <div className="space-y-1.5 pt-1">
+                <label className="block text-xs font-bold uppercase tracking-wider text-french-cream/90">
+                  Mandatory Reason *
+                </label>
+                <textarea
+                  required
+                  rows={2}
+                  value={actionReason}
+                  onChange={(e) => { setActionReason(e.target.value); setReasonError(''); }}
+                  placeholder={confirmDialog.reasonPlaceholder || 'Enter reason...'}
+                  className="w-full px-3 py-2 rounded-xl bg-french-brown/50 border border-french-gold/40 text-french-cream text-xs focus:outline-none focus:border-french-gold"
+                  autoFocus
+                />
+              </div>
+            )}
+
             <div className="pt-2 flex gap-3">
               <button
                 type="button"
-                onClick={() => setConfirmDialog(null)}
+                disabled={dialogLoading}
+                onClick={() => { setConfirmDialog(null); setActionReason(''); setReasonError(''); }}
                 className="flex-1 py-2.5 rounded-2xl bg-french-brown/70 hover:bg-french-brown text-french-cream font-bold text-xs uppercase tracking-wider transition-colors"
               >
                 No, Cancel
@@ -474,10 +599,25 @@ export default function AdminUsersManager() {
 
               <button
                 type="button"
-                onClick={confirmDialog.onConfirm}
-                className="flex-1 py-2.5 rounded-2xl bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs uppercase tracking-wider transition-all shadow-lg"
+                disabled={dialogLoading}
+                onClick={() => {
+                  if (confirmDialog.type === 'suspend') {
+                    handleSuspendAdmin(confirmDialog.admin, actionReason);
+                  } else if (confirmDialog.type === 'restore') {
+                    handleRestoreAdmin(confirmDialog.admin);
+                  } else if (confirmDialog.type === 'remove') {
+                    handleRemoveAdmin(confirmDialog.admin, actionReason);
+                  } else if (confirmDialog.onConfirm) {
+                    confirmDialog.onConfirm();
+                  }
+                }}
+                className={`flex-1 py-2.5 rounded-2xl font-extrabold text-xs uppercase tracking-wider transition-all shadow-lg text-white ${
+                  confirmDialog.type === 'restore'
+                    ? 'bg-emerald-600 hover:bg-emerald-700'
+                    : 'bg-red-600 hover:bg-red-700'
+                }`}
               >
-                Yes, Proceed
+                {dialogLoading ? 'Processing...' : 'Yes, Confirm'}
               </button>
             </div>
           </div>

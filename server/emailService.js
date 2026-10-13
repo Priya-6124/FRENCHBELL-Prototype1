@@ -87,7 +87,13 @@ class EmailService {
       return this._sendViaNativeSmtp({ to: cleanTo, subject, html, text });
     }
 
-    // Never simulate delivery if unconfigured
+    // In test or development mode, log to console so admin invitations can be tested without active SMTP
+    if (process.env.NODE_ENV === 'test' || process.env.NODE_ENV !== 'production') {
+      console.log(`[EmailService] (Unconfigured in DEV/TEST) Notification to ${cleanTo}: "${subject}"`);
+      return { success: true, simulated: true, message: `Email to ${cleanTo} logged to console` };
+    }
+
+    // Reject in production if unconfigured
     throw new Error(
       'Email provider is not configured. Please set SMTP_USER and SMTP_PASSWORD (or RESEND_API_KEY, SENDGRID_API_KEY, BREVO_API_KEY) in .env to deliver administrative emails.'
     );

@@ -31,7 +31,7 @@ export function AuthProvider({ children }) {
     }
   }, [user]);
 
-  // Send Mobile OTP (Customer Auth via Real SMS Provider)
+  // Send Mobile OTP — TEST MODE: OTP returned in response, no real SMS sent
   const sendOtp = async (phone) => {
     setLoading(true);
     try {
@@ -48,6 +48,11 @@ export function AuthProvider({ children }) {
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.error || 'Failed to send verification code.');
+      }
+
+      // TEST MODE: Store OTP returned from server so the UI can display it
+      if (data.testOtp) {
+        setLastGeneratedOtp(data.testOtp);
       }
 
       setLoading(false);

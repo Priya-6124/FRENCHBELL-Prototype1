@@ -330,6 +330,19 @@ export default function AuthModal({ onClose }) {
                 </label>
               </div>
 
+              {/* Development Mode Notice */}
+              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-800 text-xs space-y-1">
+                <p className="font-bold flex items-center gap-1.5">
+                  <span>⚠️</span>
+                  <span>Development / Test Mode Active</span>
+                </p>
+                <p>
+                  Real SMS is <strong>disabled</strong>. Use fixed test OTP:{' '}
+                  <span className="font-mono bg-amber-200 px-1.5 py-0.5 rounded text-french-dark font-black">1234</span>
+                  {' '}for any mobile number.
+                </p>
+              </div>
+
               <button
                 type="submit"
                 disabled={loading || phone.length < 10}
@@ -365,6 +378,13 @@ export default function AuthModal({ onClose }) {
                 >
                   Change Mobile Number
                 </button>
+              </div>
+
+              {/* Dev Test OTP Notice */}
+              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-800 text-xs text-center font-semibold">
+                ⚠️ Test Mode: Enter{' '}
+                <span className="font-mono bg-amber-200 px-1.5 py-0.5 rounded text-french-dark font-black">1234</span>
+                {' '}— real SMS is disabled.
               </div>
 
               {/* 4 Individual Pin Inputs */}

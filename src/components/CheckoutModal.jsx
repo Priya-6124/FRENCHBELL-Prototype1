@@ -55,6 +55,9 @@ export default function CheckoutModal({ onClose, onOrderPlaced }) {
   // Payment Selection
   const [paymentMethod, setPaymentMethod] = useState('upi'); // 'upi' | 'card' | 'netbanking' | 'cash'
   const [upiApp, setUpiApp] = useState('gpay'); // 'gpay' | 'phonepe' | 'paytm' | 'qr'
+  const [simulatedOutcome, setSimulatedOutcome] = useState('success'); // 'success' | 'failure'
+  const [createdOrder, setCreatedOrder] = useState(null); // Prevents duplicate order creation on retry
+  const [paymentError, setPaymentError] = useState('');
   const [cardDetails] = useState({
     number: '4532 •••• •••• 8821',
     expiry: '12/28',
@@ -105,7 +108,7 @@ export default function CheckoutModal({ onClose, onOrderPlaced }) {
     }
   };
 
-  // Process Payment and Place Order (Guards against duplicate clicks)
+  // Process Payment and Place Order (Guards against duplicate clicks and duplicate orders)
   const handleExecutePayment = async () => {
     if (isProcessingPayment) return;
 
@@ -116,122 +119,143 @@ export default function CheckoutModal({ onClose, onOrderPlaced }) {
     }
 
     setIsProcessingPayment(true);
-
-    const customerName = (user.name || otpName || 'Valued Foodie').trim();
-    const customerPhone = user.phone;
-
-    const payload = {
-      user_id: user.id || null,
-      order_type: orderMode,
-      table_number: orderMode === 'dine-in' ? (dineInDetails.tableNumber || '04') : null,
-      num_people: orderMode === 'dine-in' ? (dineInDetails.numPeople || 2) : null,
-      customer_name: customerName,
-      phone: customerPhone,
-      pickup_time: orderMode === 'takeaway' ? (takeawayDetails.pickupTime || '20 mins') : null,
-      delivery_address: orderMode === 'delivery' ? (deliveryDetails.address || 'K. Narayanpura') : null,
-      landmark: orderMode === 'delivery' ? deliveryDetails.landmark : null,
-      pincode: orderMode === 'delivery' ? deliveryDetails.pincode : null,
-      delivery_distance_km: 1.5,
-      subtotal: cartSubtotal,
-      discount: discountAmount,
-      coupon_code: appliedOffer?.coupon_code || null,
-      delivery_charge: deliveryCharge,
-      total: grandTotal,
-      payment_method: paymentMethod === 'cash' ? 'cash' : `simulated_${paymentMethod}_${upiApp}`,
-      special_instructions: orderMode === 'dine-in'
-        ? dineInDetails.instructions
-        : (orderMode === 'takeaway' ? takeawayDetails.instructions : deliveryDetails.instructions),
-      items: cart.map(i => ({
-        menu_item_id: i.id,
-        item_name: i.name,
-        variant: i.variant,
-        quantity: i.quantity,
-        unit_price: i.price,
-        total_price: i.price * i.quantity,
-        special_instructions: i.special_instructions || i.specialInstructions || ''
-      }))
-    };
+    setPaymentError('');
 
     try {
-      // 1. Create order in database
-      const res = await fetch('/api/orders', {
+      let activeOrder = createdOrder;
+
+      // 1. Create order in database if not already created (prevents duplicate orders upon retry)
+      if (!activeOrder) {
+        const customerName = (user.name || otpName || 'Valued Foodie').trim();
+        const customerPhone = user.phone;
+
+        const payload = {
+          user_id: user.id || null,
+          order_type: orderMode,
+          table_number: orderMode === 'dine-in' ? (dineInDetails.tableNumber || '04') : null,
+          num_people: orderMode === 'dine-in' ? (dineInDetails.numPeople || 2) : null,
+          customer_name: customerName,
+          phone: customerPhone,
+          pickup_time: orderMode === 'takeaway' ? (takeawayDetails.pickupTime || '20 mins') : null,
+          delivery_address: orderMode === 'delivery' ? (deliveryDetails.address || 'K. Narayanpura') : null,
+          landmark: orderMode === 'delivery' ? deliveryDetails.landmark : null,
+          pincode: orderMode === 'delivery' ? deliveryDetails.pincode : null,
+          delivery_distance_km: 1.5,
+          subtotal: cartSubtotal,
+          discount: discountAmount,
+          coupon_code: appliedOffer?.coupon_code || null,
+          delivery_charge: deliveryCharge,
+          total: grandTotal,
+          payment_method: paymentMethod === 'cash' ? 'cash' : `simulated_${paymentMethod}_${upiApp}`,
+          special_instructions: orderMode === 'dine-in'
+            ? dineInDetails.instructions
+            : (orderMode === 'takeaway' ? takeawayDetails.instructions : deliveryDetails.instructions),
+          items: cart.map(i => ({
+            menu_item_id: i.id,
+            item_name: i.name,
+            variant: i.variant,
+            quantity: i.quantity,
+            unit_price: i.price,
+            total_price: i.price * i.quantity,
+            special_instructions: i.special_instructions || i.specialInstructions || ''
+          }))
+        };
+
+        const res = await fetch('/api/orders', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify(payload)
+        });
+
+        const orderData = await res.json();
+        if (!res.ok) {
+          throw new Error(orderData.error || 'Failed to place order.');
+        }
+
+        activeOrder = orderData.order;
+        if (!activeOrder) {
+          throw new Error('Order creation could not be confirmed by the server.');
+        }
+        setCreatedOrder(activeOrder);
+      }
+
+      // 2. Server-side payment simulation (records attempt, status, and outcome in database)
+      const simRes = await fetch('/api/payment/simulate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { 'Authorization': `Bearer ${token}` } : {})
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({
+          order_number: activeOrder.order_number,
+          outcome: simulatedOutcome,
+          method: paymentMethod === 'cash' ? 'cash' : `simulated_${paymentMethod}_${upiApp}`
+        })
       });
 
-      const orderData = await res.json();
-      if (!res.ok) {
-        throw new Error(orderData.error || 'Failed to place order.');
+      const simData = await simRes.json();
+
+      if (!simRes.ok || simData.success === false) {
+        setIsProcessingPayment(false);
+        const errMsg = simData.message || simData.error || 'Simulated payment failed as requested.';
+        setPaymentError(`Payment Failed (Simulation): ${errMsg}`);
+        addNotification(
+          'Simulated Payment Failed',
+          `Order #${activeOrder.order_number} marked as failed. Switch to "Simulate Success" and click Retry.`,
+          'error'
+        );
+        return;
       }
 
-      const placedOrder = orderData.order;
-      if (!placedOrder) {
-        throw new Error('Order creation could not be confirmed by the server.');
-      }
-
-      // 2. Server-side payment verification
-      try {
-        await fetch('/api/payment/verify', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            order_number: placedOrder.order_number,
-            order_id: placedOrder.id,
-            payment_method: payload.payment_method,
-            amount: placedOrder.total
-          })
-        });
-      } catch (verifyErr) {
-        console.warn('Payment verify warning:', verifyErr);
-      }
-
-      // 3. Dispatch WhatsApp confirmation if opted in
+      // 3. Dispatch receipt confirmation if opted in
       if (whatsappOptIn) {
         try {
           await fetch('/api/receipts/whatsapp', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              orderNumber: placedOrder.order_number,
-              phone: customerPhone
+              orderNumber: activeOrder.order_number,
+              phone: user.phone
             })
           });
         } catch (waErr) {
-          console.warn('WhatsApp dispatch warning:', waErr);
+          console.warn('Receipt dispatch notice:', waErr);
         }
       }
 
       // 4. Success UI sequence
+      setIsProcessingPayment(false);
+      setPaymentSuccess(true);
+      playPaymentSuccessSound();
+
+      // Confetti explosion
+      try {
+        confetti({
+          particleCount: 90,
+          spread: 70,
+          origin: { y: 0.6 },
+          colors: ['#D4AF37', '#FFF8DC', '#8B5A2B', '#10B981']
+        });
+      } catch (e) {}
+
       setTimeout(() => {
-        setIsProcessingPayment(false);
-        setPaymentSuccess(true);
-        playPaymentSuccessSound();
-
-        // Confetti explosion
-        try {
-          confetti({
-            particleCount: 90,
-            spread: 70,
-            origin: { y: 0.6 },
-            colors: ['#D4AF37', '#FFF8DC', '#8B5A2B', '#10B981']
+        clearCart();
+        if (onClose) onClose();
+        if (onOrderPlaced) {
+          onOrderPlaced({
+            ...activeOrder,
+            payment_status: 'successful',
+            payment_method: paymentMethod === 'cash' ? 'cash' : `simulated_${paymentMethod}_${upiApp}`
           });
-        } catch (e) {}
-
-        setTimeout(() => {
-          clearCart();
-          if (onClose) onClose();
-          if (onOrderPlaced) {
-            onOrderPlaced(placedOrder);
-          }
-        }, 1200);
+        }
       }, 1200);
 
     } catch (err) {
       setIsProcessingPayment(false);
+      setPaymentError(err.message || 'Payment processing error');
       addNotification('Order Failed', err.message || 'Unable to place order. Please try again.', 'error');
     }
   };
@@ -296,6 +320,10 @@ export default function CheckoutModal({ onClose, onOrderPlaced }) {
               <p className="text-xs text-french-muted max-w-sm mx-auto">
                 Please verify your 10-digit mobile number to confirm your order, receive your digital receipt, and get live preparation updates.
               </p>
+
+              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-800 text-xs font-semibold text-center">
+                ⚠️ <strong>Development Notice:</strong> Test OTP mode active. Fixed code is <span className="font-mono bg-amber-200 px-1.5 py-0.5 rounded text-french-dark font-black">1234</span>. Real SMS is disabled.
+              </div>
 
               {authError && (
                 <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-700 text-xs font-semibold flex items-center gap-2 text-left">
@@ -466,11 +494,78 @@ export default function CheckoutModal({ onClose, onOrderPlaced }) {
                 </div>
               </div>
 
+              {/* Payment Failure Error Banner */}
+              {paymentError && (
+                <div className="p-3.5 rounded-2xl bg-red-500/10 border border-red-500/30 text-red-700 text-xs font-semibold flex items-start gap-2.5">
+                  <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="font-bold">{paymentError}</p>
+                    <p className="text-[11px] text-red-600/90 mt-0.5">
+                      {createdOrder ? `Order #${createdOrder.order_number} is recorded as "failed". Select "Simulate Success" below to retry payment safely without creating a duplicate order.` : 'Payment was rejected.'}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Simulated Test Payment Sandbox Notice */}
+              <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-900 text-xs space-y-1">
+                <div className="flex items-center gap-2 font-bold uppercase tracking-wider text-[11px] text-amber-800">
+                  <Sparkles className="w-3.5 h-3.5 text-french-gold shrink-0" />
+                  <span>Simulated Payment Provider (Test Mode)</span>
+                </div>
+                <p className="text-[11px] text-french-dark/80">
+                  This checkout is running in dummy test mode. No real money or bank accounts will be charged. Sensitive credentials (card numbers, CVVs, UPI PINs) are never collected.
+                </p>
+              </div>
+
+              {/* Simulation Outcome Controls */}
+              <div className="p-3.5 rounded-2xl bg-french-cream border border-french-gold/30 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-french-dark">
+                    Test Mode: Simulate Payment Outcome
+                  </span>
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-french-dark text-french-gold">
+                    SANDBOX
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSimulatedOutcome('success')}
+                    className={`p-2.5 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                      simulatedOutcome === 'success'
+                        ? 'bg-emerald-700 text-white border-emerald-800 shadow'
+                        : 'bg-french-card text-french-dark border-french-gold/25 hover:border-emerald-600'
+                    }`}
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Simulate Success</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSimulatedOutcome('failure')}
+                    className={`p-2.5 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                      simulatedOutcome === 'failure'
+                        ? 'bg-red-700 text-white border-red-800 shadow'
+                        : 'bg-french-card text-french-dark border-french-gold/25 hover:border-red-600'
+                    }`}
+                  >
+                    <AlertCircle className="w-4 h-4" />
+                    <span>Simulate Failure</span>
+                  </button>
+                </div>
+                {createdOrder && (
+                  <div className="text-[11px] text-french-dark/70 font-mono pt-1">
+                    Retrying on existing Order <strong>#{createdOrder.order_number}</strong> (prevents duplicate orders).
+                  </div>
+                )}
+              </div>
+
               {/* Payment Method Selector */}
               <div className="space-y-3">
                 <label className="block text-xs font-bold uppercase tracking-wider text-french-dark flex items-center gap-1.5">
                   <Lock className="w-3.5 h-3.5 text-french-gold" />
-                  <span>Payment Method</span>
+                  <span>Simulated Payment Instrument</span>
                 </label>
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
@@ -578,7 +673,7 @@ export default function CheckoutModal({ onClose, onOrderPlaced }) {
               <div className="flex items-center gap-2.5 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-900 text-xs">
                 <MessageSquare className="w-4 h-4 text-emerald-600 flex-shrink-0" />
                 <span>
-                  Order confirmation and live updates will be sent to <strong>+91 {user?.phone || otpPhone}</strong>
+                  Receipt will be available for download after payment. Digital copy retained in your account.
                 </span>
               </div>
 
@@ -587,22 +682,31 @@ export default function CheckoutModal({ onClose, onOrderPlaced }) {
                 type="button"
                 onClick={handleExecutePayment}
                 disabled={isProcessingPayment || paymentSuccess}
-                className="w-full py-4 rounded-2xl bg-gradient-to-r from-french-gold via-french-gold-hover to-[#C09C2E] text-french-dark font-extrabold text-sm uppercase tracking-wider shadow-xl hover:scale-[1.02] active:scale-[0.99] transition-all flex items-center justify-center gap-2 gold-glow disabled:opacity-60"
+                className={`w-full py-4 rounded-2xl font-extrabold text-sm uppercase tracking-wider shadow-xl hover:scale-[1.02] active:scale-[0.99] transition-all flex items-center justify-center gap-2 disabled:opacity-60 ${
+                  simulatedOutcome === 'failure'
+                    ? 'bg-red-700 text-white hover:bg-red-800'
+                    : 'bg-gradient-to-r from-french-gold via-french-gold-hover to-[#C09C2E] text-french-dark gold-glow'
+                }`}
               >
                 {isProcessingPayment ? (
                   <>
                     <Loader2 className="w-5 h-5 animate-spin" />
-                    <span>Verifying Payment (₹{grandTotal})...</span>
+                    <span>{createdOrder ? 'Retrying Payment...' : 'Placing Order...'}</span>
                   </>
                 ) : paymentSuccess ? (
                   <>
                     <CheckCircle2 className="w-5 h-5 text-emerald-800" />
-                    <span>Payment Confirmed</span>
+                    <span>Payment Confirmed ✓ [TEST/SIMULATED]</span>
+                  </>
+                ) : simulatedOutcome === 'failure' ? (
+                  <>
+                    <AlertCircle className="w-5 h-5" />
+                    <span>{createdOrder ? 'Retry with Failure Simulation' : `Test Failure — ₹${grandTotal}`}</span>
                   </>
                 ) : (
                   <>
                     <ShieldCheck className="w-5 h-5" />
-                    <span>Pay ₹{grandTotal} & Confirm Order</span>
+                    <span>{createdOrder ? `Retry Payment — ₹${grandTotal} [TEST]` : `Pay ₹${grandTotal} — Simulated [TEST]`}</span>
                   </>
                 )}
               </button>
