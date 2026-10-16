@@ -1,5 +1,4 @@
 -- FrenchBell Cafe PostgreSQL Database Schema
--- Compatible with PostgreSQL 13+
 
 -- 1. Users Table (Customers and Administrators)
 CREATE TABLE IF NOT EXISTS users (
@@ -78,7 +77,8 @@ CREATE INDEX IF NOT EXISTS idx_customer_otps_phone ON customer_otps(phone);
 -- 5. Orders Table
 CREATE TABLE IF NOT EXISTS orders (
   id SERIAL PRIMARY KEY,
-  order_number VARCHAR(50) UNIQUE NOT NULL,
+  order_number VARCHAR(50) NOT NULL,
+  business_day DATE NOT NULL,
   user_id INT REFERENCES users(id) ON DELETE SET NULL,
   order_type VARCHAR(20) NOT NULL, -- 'dine-in', 'takeaway', 'delivery'
   table_number VARCHAR(20),

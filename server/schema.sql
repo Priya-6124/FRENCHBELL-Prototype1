@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS menu_items (
 CREATE TABLE IF NOT EXISTS orders (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   order_number VARCHAR(50) UNIQUE NOT NULL,
+  business_day DATE NOT NULL,
   user_id INT,
   order_type VARCHAR(20) NOT NULL, -- 'dine-in', 'takeaway', 'delivery'
   table_number VARCHAR(20),

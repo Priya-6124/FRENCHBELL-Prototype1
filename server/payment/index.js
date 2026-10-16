@@ -13,12 +13,12 @@ export class PaymentService {
   /**
    * Execute simulated test payment (success or failure)
    */
-  static async executeSimulatedPayment({ orderNumber, outcome = 'success', method = 'simulated_upi' }) {
+  static async executeSimulatedPayment({ orderId, orderNumber, outcome = 'success', method = 'simulated_upi' }) {
     const db = await getDb();
 
     // 1. Fetch order
-    const order = await db.get('SELECT * FROM orders WHERE order_number = ?', [orderNumber]);
-    if (!order) {
+    const order = await db.get('SELECT * FROM orders WHERE id = ?', [orderId]);
+      if (!order) {
       throw new Error(`Order #${orderNumber} not found.`);
     }
 
@@ -69,7 +69,7 @@ export class PaymentService {
     }
 
     // SUCCESS SIMULATION
-    const receiptNumber = `RCP_${order.order_number}`;
+    const receiptNumber = `RCP_${order.id}_${Date.now()}`;
 
     await db.transaction(async (tx) => {
       // 1. Record payment
@@ -104,9 +104,7 @@ export class PaymentService {
       await tx.run(`
         INSERT INTO receipts (order_id, receipt_number, destination_phone, delivery_status, provider, delivery_message)
         VALUES (?, ?, ?, 'unconfigured', 'none', 'Receipt messaging is not configured. Digital receipt retained in account.')
-        ON CONFLICT (receipt_number) DO UPDATE SET
-          delivery_status = 'unconfigured',
-          updated_at = CURRENT_TIMESTAMP
+        ON CONFLICT (receipt_number) DO NOTHING
       `, [order.id, receiptNumber, configuredPhone]);
 
       // 5. Audit log
@@ -138,14 +136,14 @@ export class PaymentService {
   /**
    * Razorpay Test Mode Verification (Ready for future activation with RAZORPAY_KEY_SECRET)
    */
-  static async verifyRazorpayPayment({ orderNumber, razorpayPaymentId, razorpayOrderId, razorpaySignature }) {
+  static async verifyRazorpayPayment({ orderId, orderNumber, razorpayPaymentId, razorpayOrderId, razorpaySignature }) {
     const keySecret = process.env.RAZORPAY_KEY_SECRET;
     if (!keySecret) {
       throw new Error('Razorpay is not configured on the server. Please use the simulated test payment provider.');
     }
 
     const db = await getDb();
-    const order = await db.get('SELECT * FROM orders WHERE order_number = ?', [orderNumber]);
+    const order = await db.get('SELECT * FROM orders WHERE id = ?', [orderId]);
     if (!order) throw new Error(`Order #${orderNumber} not found.`);
 
     // Verify HMAC-SHA256 signature
@@ -161,7 +159,7 @@ export class PaymentService {
     }
 
     // Success transition
-    const receiptNumber = `RCP_${order.order_number}`;
+    const receiptNumber = `RCP_${order.id}_${Date.now()}`;
     await db.transaction(async (tx) => {
       await tx.run(`
         INSERT INTO payments (order_id, transaction_id, provider, amount, currency, method, status)

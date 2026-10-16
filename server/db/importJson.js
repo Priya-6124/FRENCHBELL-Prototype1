@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -249,7 +250,12 @@ export async function importFromJson(customJsonPath = null) {
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
           ON CONFLICT (token) DO NOTHING
         `, [
-          inv.id, inv.email.toLowerCase(), inv.token, inv.status || 'pending', inv.invited_by || 'system', inv.invited_by_name || 'Admin', new Date(inv.expires_at || Date.now() + 72*3600*1000), inv.created_at ? new Date(inv.created_at) : new Date()
+          Number(String(inv.id).slice(-8)), inv.email.toLowerCase(), inv.token, inv.status || 'pending', inv.invited_by || 'system', inv.invited_by_name || 'Admin',
+          new Date(
+  inv.expires_at
+    ? Number(inv.expires_at)
+    : Date.now() + 72 * 60 * 60 * 1000
+), inv.created_at ? new Date(inv.created_at) : new Date()
         ]);
         counts.invitations++;
       }

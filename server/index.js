@@ -1362,48 +1362,95 @@ app.post('/api/orders', async (req, res) => {
     const serverTax = Math.round(taxableAmount * taxRate);
     const serverGrandTotal = Math.max(0, taxableAmount + serverTax + calculatedDeliveryCharge);
 
-    const orderNumber = await db.generateNextOrderNumber();
 
     // Create Order with pending payment status
-    const createdOrder = await db.transaction(async (tx) => {
-      const insertResult = await tx.run(`
-        INSERT INTO orders (
-          order_number, user_id, order_type, table_number, num_people, customer_name, phone,
-          pickup_time, delivery_address, landmark, pincode, subtotal, discount,
-          delivery_charge, tax, total, payment_status, payment_method, order_status, special_instructions
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, 'received', ?)
-      `, [
-        orderNumber, customerUser.id, cleanOrderType, table_number || null, num_people || null,
-        customer_name.trim(), cleanPhone, pickup_time || null, delivery_address || null, landmark || null,
-        pincode || null, serverSubtotal, serverDiscount, calculatedDeliveryCharge, serverTax, serverGrandTotal,
-        payment_method || 'simulated', special_instructions || ''
-      ]);
+    // Create Order with pending payment status
+const orderResult = await db.transaction(async (tx) => {
+  // Prevent simultaneous orders from generating the same number.
+  await tx.query(
+    'SELECT pg_advisory_xact_lock($1, $2)',
+    [24016, 1]
+  );
 
-      const orderId = insertResult.lastID;
+  // Calculate the business day using Bengaluru time and a 2 AM reset.
+  const sequenceResult = await tx.get(`
+  WITH business_day AS (
+    SELECT CASE
+      WHEN (NOW() AT TIME ZONE 'Asia/Kolkata')::time < TIME '02:00'
+        THEN (NOW() AT TIME ZONE 'Asia/Kolkata')::date - 1
+      ELSE (NOW() AT TIME ZONE 'Asia/Kolkata')::date
+    END AS day
+  )
+  SELECT
+    b.day AS business_day,
+    COALESCE(
+      MAX(SUBSTRING(o.order_number FROM '^FB([0-9]+)$')::INTEGER),
+      0
+    ) AS max_sequence
+  FROM business_day b
+  LEFT JOIN orders o
+    ON o.business_day = b.day
+    AND o.order_number ~ '^FB[0-9]+$'
+  GROUP BY b.day
+`);
 
-      for (const item of validatedItems) {
-        await tx.run(`
-          INSERT INTO order_items (order_id, menu_item_id, item_name, variant, quantity, unit_price, total_price, special_instructions)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        `, [orderId, item.menu_item_id, item.item_name, item.variant, item.quantity, item.unit_price, item.total_price, item.special_instructions]);
-      }
+  const nextSequence = Number(sequenceResult.max_sequence) + 1;
+  const orderNumber = `FB${String(nextSequence).padStart(3, '0')}`;
 
-      await tx.run(`
-        INSERT INTO order_status_history (order_id, previous_status, new_status, changed_by, change_reason)
-        VALUES (?, NULL, 'received', 'Customer Checkout', 'Order created pending payment')
-      `, [orderId]);
+  const insertResult = await tx.run(`
+  INSERT INTO orders (
+    order_number, business_day, user_id, order_type, table_number, num_people,
+    customer_name, phone, pickup_time, delivery_address, landmark, pincode,
+    subtotal, discount, delivery_charge, tax, total, payment_status,
+    payment_method, order_status, special_instructions
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, 'received', ?)
+`, [
+  orderNumber, sequenceResult.business_day, customerUser.id, cleanOrderType,
+  table_number || null, num_people || null, customer_name.trim(), cleanPhone,
+  pickup_time || null, delivery_address || null, landmark || null, pincode || null,
+  serverSubtotal, serverDiscount, calculatedDeliveryCharge, serverTax, serverGrandTotal,
+  payment_method || 'simulated', special_instructions || ''
+]);
 
-      return await tx.get('SELECT * FROM orders WHERE id = ?', [orderId]);
-    });
+  const orderId = insertResult.lastID;
 
-    createdOrder.items = validatedItems;
+  for (const item of validatedItems) {
+    await tx.run(`
+      INSERT INTO order_items (
+        order_id, menu_item_id, item_name, variant, quantity,
+        unit_price, total_price, special_instructions
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      orderId, item.menu_item_id, item.item_name, item.variant,
+      item.quantity, item.unit_price, item.total_price, item.special_instructions
+    ]);
+  }
 
-    res.json({
-      success: true,
-      order: createdOrder,
-      order_number: orderNumber,
-      message: 'Order created successfully. Ready for payment.'
-    });
+  await tx.run(`
+    INSERT INTO order_status_history (
+      order_id, previous_status, new_status, changed_by, change_reason
+    )
+    VALUES (?, NULL, 'received', 'Customer Checkout', 'Order created pending payment')
+  `, [orderId]);
+
+  const createdOrder = await tx.get(
+    'SELECT * FROM orders WHERE id = ?',
+    [orderId]
+  );
+
+  return { createdOrder, orderNumber };
+});
+
+const { createdOrder, orderNumber } = orderResult;
+createdOrder.items = validatedItems;
+
+res.json({
+  success: true,
+  order: createdOrder,
+  order_number: orderNumber,
+  message: 'Order created successfully. Ready for payment.'
+});
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1412,15 +1459,31 @@ app.post('/api/orders', async (req, res) => {
 // =================== 6. PAYMENT INTEGRATION (SIMULATED & TEST MODE) ===================
 
 // Execute Simulated Payment (Success or Failure)
+
+ // Execute Simulated Payment (Success or Failure)
 app.post('/api/payment/simulate', async (req, res) => {
   try {
-    const { order_number, outcome, method } = req.body;
-    if (!order_number) {
-      return res.status(400).json({ error: 'Order number is required for payment simulation.' });
+    const { order_id, order_number, outcome, method } = req.body;
+
+    if (!order_id) {
+      return res.status(400).json({
+        error: 'Order ID is required for payment simulation.'
+      });
+    }
+
+    const db = await getDb();
+    const order = await db.get(
+      'SELECT id, order_number FROM orders WHERE id = ?',
+      [order_id]
+    );
+
+    if (!order || (order_number && order.order_number !== order_number)) {
+      return res.status(404).json({ error: 'Order not found.' });
     }
 
     const result = await PaymentService.executeSimulatedPayment({
-      orderNumber: order_number,
+      orderId: order.id,
+      orderNumber: order.order_number,
       outcome: outcome || 'success',
       method: method || 'simulated_upi'
     });
@@ -1430,6 +1493,41 @@ app.post('/api/payment/simulate', async (req, res) => {
     res.status(400).json({ error: err.message });
   }
 });
+
+// Legacy / General Payment Verify route
+app.post('/api/payment/verify', async (req, res) => {
+  try {
+    const { order_id, order_number, outcome, payment_method } = req.body;
+
+    if (!order_id) {
+      return res.status(400).json({
+        error: 'Order ID is required for payment verification.'
+      });
+    }
+
+    const db = await getDb();
+    const order = await db.get(
+      'SELECT id, order_number FROM orders WHERE id = ?',
+      [order_id]
+    );
+
+    if (!order || (order_number && order.order_number !== order_number)) {
+      return res.status(404).json({ error: 'Order not found.' });
+    }
+
+    const result = await PaymentService.executeSimulatedPayment({
+      orderId: order.id,
+      orderNumber: order.order_number,
+      outcome: outcome || 'success',
+      method: payment_method || 'simulated_upi'
+    });
+
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 
 // Legacy / General Payment Verify route
 app.post('/api/payment/verify', async (req, res) => {
@@ -1495,11 +1593,28 @@ app.get('/api/customer/orders', authenticateToken, async (req, res) => {
 // Helper: Retrieve order safely by integer ID or string order_number
 export async function getOrderByIdOrNumber(db, identifier) {
   if (!identifier) return null;
-  const isNumeric = /^\d+$/.test(String(identifier).trim());
-  if (isNumeric) {
-    return await db.get('SELECT * FROM orders WHERE id = ? OR order_number = ?', [parseInt(identifier, 10), String(identifier).trim()]);
+
+  const value = String(identifier).trim();
+
+  // Prefer the unique database ID when the identifier is numeric.
+  if (/^\d+$/.test(value)) {
+    const orderById = await db.get(
+      'SELECT * FROM orders WHERE id = ?',
+      [Number(value)]
+    );
+
+    if (orderById) return orderById;
   }
-  return await db.get('SELECT * FROM orders WHERE order_number = ?', [String(identifier).trim()]);
+
+  // Order numbers may repeat on different business days.
+  // Without a business-day context, return the newest matching order.
+  return await db.get(
+    `SELECT * FROM orders
+     WHERE order_number = ?
+     ORDER BY created_at DESC, id DESC
+     LIMIT 1`,
+    [value]
+  );
 }
 
 // Order Tracking Endpoint (Ownership checked where appropriate)
@@ -1789,19 +1904,53 @@ app.post('/api/receipts/:orderNumber/dispatch', async (req, res) => {
 });
 
 // WhatsApp link generator (for manual customer click or chat open)
+
 app.post('/api/receipts/whatsapp', async (req, res) => {
   try {
-    const { order_number, orderNumber, phone } = req.body;
-    const targetOrderNumber = order_number || orderNumber;
+    const { order_id, orderId, order_number, orderNumber, phone } = req.body;
     const db = await getDb();
-    const order = await db.get('SELECT * FROM orders WHERE order_number = ?', [targetOrderNumber]);
-    if (!order) return res.status(404).json({ error: 'Order not found' });
+
+    let order = null;
+    const targetOrderId = order_id ?? orderId;
+
+    if (targetOrderId !== undefined && targetOrderId !== null) {
+      order = await db.get(
+        'SELECT * FROM orders WHERE id = ?',
+        [targetOrderId]
+      );
+    } else {
+      const targetOrderNumber = order_number || orderNumber;
+
+      if (targetOrderNumber) {
+        order = await db.get(
+          `SELECT * FROM orders
+           WHERE order_number = ?
+           ORDER BY created_at DESC, id DESC
+           LIMIT 1`,
+          [targetOrderNumber]
+        );
+      }
+    }
+
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
 
     const targetPhone = phone || order.phone;
     const cleanPhone = normalizePhone(targetPhone);
 
-    const message = encodeURIComponent(`FrenchBell Cafe Order #${order.order_number}\nAmount: ₹${order.total}\nStatus: ${order.order_status}\nView receipt: ${getBaseUrl(req)}/api/receipts/${order.order_number}/download`);
-    const whatsappLink = `https://wa.me/91${cleanPhone}?text=${message}`;
+    const receiptUrl =
+      `${getBaseUrl(req)}/api/receipts/${order.id}/download`;
+
+    const message = encodeURIComponent(
+      `FrenchBell Cafe Order #${order.order_number}\n` +
+      `Amount: ₹${order.total}\n` +
+      `Status: ${order.order_status}\n` +
+      `View receipt: ${receiptUrl}`
+    );
+
+    const whatsappLink =
+      `https://wa.me/91${cleanPhone}?text=${message}`;
 
     res.json({
       success: true,
@@ -1813,6 +1962,7 @@ app.post('/api/receipts/whatsapp', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
 
 // =================== 9. CUSTOMERS DIRECTORY ===================
 

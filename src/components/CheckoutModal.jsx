@@ -189,11 +189,14 @@ export default function CheckoutModal({ onClose, onOrderPlaced }) {
           'Content-Type': 'application/json',
           ...(token ? { 'Authorization': `Bearer ${token}` } : {})
         },
-        body: JSON.stringify({
-          order_number: activeOrder.order_number,
-          outcome: simulatedOutcome,
-          method: paymentMethod === 'cash' ? 'cash' : `simulated_${paymentMethod}_${upiApp}`
-        })
+
+body: JSON.stringify({
+  order_id: activeOrder.id,
+  order_number: activeOrder.order_number,
+  outcome: simulatedOutcome,
+  method: paymentMethod === 'cash' ? 'cash' : `simulated_${paymentMethod}_${upiApp}`
+})
+
       });
 
       const simData = await simRes.json();
@@ -210,6 +213,7 @@ export default function CheckoutModal({ onClose, onOrderPlaced }) {
         return;
       }
 
+
       // 3. Dispatch receipt confirmation if opted in
       if (whatsappOptIn) {
         try {
@@ -217,6 +221,7 @@ export default function CheckoutModal({ onClose, onOrderPlaced }) {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
+              order_id: activeOrder.id,
               orderNumber: activeOrder.order_number,
               phone: user.phone
             })
@@ -225,6 +230,7 @@ export default function CheckoutModal({ onClose, onOrderPlaced }) {
           console.warn('Receipt dispatch notice:', waErr);
         }
       }
+
 
       // 4. Success UI sequence
       setIsProcessingPayment(false);
