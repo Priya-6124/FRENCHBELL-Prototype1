@@ -34,14 +34,25 @@ function getRazorpayClient() {
   });
 }
 // Production safety check: Reject test OTP mode in production
-const isProduction = process.env.NODE_ENV === 'production';
-const isTestOtpMode = process.env.TEST_OTP_MODE === 'true' || (!isProduction && process.env.TEST_OTP_MODE !== 'false');
+
+ // Production safety check: distinguish Vercel Production from Preview
+const isProduction = process.env.VERCEL === '1'
+  ? process.env.VERCEL_ENV === 'production'
+  : process.env.NODE_ENV === 'production';
+
+const isTestOtpMode =
+  process.env.TEST_OTP_MODE === 'true' ||
+  (!isProduction && process.env.TEST_OTP_MODE !== 'false');
+
 const DEV_FIXED_OTP = process.env.DEV_FIXED_OTP || '1234';
 
 if (isProduction && process.env.TEST_OTP_MODE === 'true') {
-  console.error('FATAL: Production startup rejected. TEST_OTP_MODE cannot be enabled in a production environment.');
+  console.error(
+    'FATAL: Production startup rejected. TEST_OTP_MODE cannot be enabled in a production environment.'
+  );
   process.exit(1);
 }
+
 
 app.use(cors());
 
