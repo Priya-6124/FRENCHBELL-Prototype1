@@ -83,8 +83,17 @@ class PgDatabase {
       const res = await this.pool.query('SELECT 1 as healthy');
       return { ok: true, healthy: res.rows[0].healthy === 1 };
     } catch (err) {
-      return { ok: false, error: 'Database service is unreachable' };
-    }
+  console.error(
+    '[Database] Health check failed:',
+    err.code || 'NO_CODE',
+    err.message
+  );
+
+  return {
+    ok: false,
+    error: 'Database service is unreachable'
+  };
+}
   }
 
   async query(sql, params = []) {

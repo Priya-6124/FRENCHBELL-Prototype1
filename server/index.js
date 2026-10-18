@@ -8,6 +8,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import getDb, { generateNextOrderNumber, getCafeBusinessDay, canTransitionOrderStatus, VALID_ORDER_STATUS_TRANSITIONS } from './db/index.js';
+import Razorpay from 'razorpay';
 import emailService from './emailService.js';
 import smsService from './smsService.js';
 import PaymentService, { ReceiptDeliveryService } from './payment/index.js';
@@ -19,6 +20,19 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || 'frenchbell_secret_key_2026_cafe_secure_jwt_token_982341';
 
+function getRazorpayClient() {
+  const keyId = process.env.RAZORPAY_KEY_ID;
+  const keySecret = process.env.RAZORPAY_KEY_SECRET;
+
+  if (!keyId || !keySecret) {
+    throw new Error('Razorpay Test Mode keys are not configured on the server.');
+  }
+
+  return new Razorpay({
+    key_id: keyId,
+    key_secret: keySecret
+  });
+}
 // Production safety check: Reject test OTP mode in production
 const isProduction = process.env.NODE_ENV === 'production';
 const isTestOtpMode = process.env.TEST_OTP_MODE === 'true' || (!isProduction && process.env.TEST_OTP_MODE !== 'false');
@@ -1460,6 +1474,94 @@ res.json({
 
 // Execute Simulated Payment (Success or Failure)
 
+app.post('/api/payment/razorpay/order', authenticateToken, async (req, res) => {  try {
+    const { order_id } = req.body;
+
+    if (!order_id || !Number.isInteger(Number(order_id)) || Number(order_id) < 1) {
+      return res.status(400).json({
+        error: 'A valid order_id is required.'
+      });
+    }
+
+    const db = await getDb();
+
+    // Always use the total stored in our own database.
+    const order = await db.get(
+  `SELECT id, order_number, total, payment_status
+   FROM orders
+   WHERE id = ? AND user_id = ?`,
+  [Number(order_id), req.user.id]
+);
+
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found.' });
+    }
+
+    if (['successful', 'paid'].includes(
+      String(order.payment_status || '').toLowerCase()
+    )) {
+      return res.status(409).json({
+        error: 'This order has already been paid.'
+      });
+    }
+
+    const amountInPaise = Math.round(Number(order.total) * 100);
+
+    if (!Number.isSafeInteger(amountInPaise) || amountInPaise < 100) {
+      return res.status(400).json({
+        error: 'Order total must be at least ₹1.00.'
+      });
+    }
+
+    const razorpay = getRazorpayClient();
+
+    const razorpayOrder = await razorpay.orders.create({
+      amount: amountInPaise,
+      currency: 'INR',
+      receipt: `FB${order.id}_${Date.now()}`,
+      notes: {
+        frenchbell_order_id: String(order.id),
+        frenchbell_order_number: String(order.order_number)
+      }
+    });
+
+    await db.run(
+      `INSERT INTO payments (
+        order_id, transaction_id, razorpay_order_id,
+        provider, amount, currency, method, status, raw_response
+      ) VALUES (?, ?, ?, 'razorpay', ?, 'INR', 'razorpay', 'pending', ?)`,
+      [
+        order.id,
+        `rzp_order_${razorpayOrder.id}`,
+        razorpayOrder.id,
+        Number(order.total),
+        JSON.stringify({
+          id: razorpayOrder.id,
+          amount: razorpayOrder.amount,
+          currency: razorpayOrder.currency,
+          status: razorpayOrder.status
+        })
+      ]
+    );
+
+    return res.json({
+      success: true,
+      key_id: process.env.RAZORPAY_KEY_ID,
+      razorpay_order_id: razorpayOrder.id,
+      amount: razorpayOrder.amount,
+      currency: razorpayOrder.currency,
+      order_id: order.id,
+      order_number: order.order_number
+    });
+  } catch (err) {
+    console.error('[Razorpay order creation]', err.message);
+
+    return res.status(500).json({
+      error: 'Unable to create the Razorpay order. Please try again.'
+    });
+  }
+});
+
  // Execute Simulated Payment (Success or Failure)
 app.post('/api/payment/simulate', async (req, res) => {
   try {
@@ -1544,6 +1646,69 @@ app.post('/api/payment/verify', async (req, res) => {
     res.json(result);
   } catch (err) {
     res.status(400).json({ error: err.message });
+  }
+});
+
+
+app.post('/api/payment/razorpay/verify', authenticateToken, async (req, res) => {
+  try {
+    const {
+      order_id,
+      order_number,
+      razorpay_payment_id,
+      razorpay_order_id,
+      razorpay_signature
+    } = req.body;
+
+    if (
+      !order_id ||
+      !order_number ||
+      !razorpay_payment_id ||
+      !razorpay_order_id ||
+      !razorpay_signature
+    ) {
+      return res.status(400).json({
+        success: false,
+        error: 'Required Razorpay payment details are missing.'
+      });
+    }
+
+    const db = await getDb();
+
+    // Ensure this order belongs to the logged-in customer.
+    const order = await db.get(
+      `SELECT id, order_number
+       FROM orders
+       WHERE id = ? AND order_number = ? AND user_id = ?`,
+      [Number(order_id), order_number, req.user.id]
+    );
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        error: 'Order not found.'
+      });
+    }
+
+    const result = await PaymentService.verifyRazorpayPayment({
+      orderId: order.id,
+      orderNumber: order.order_number,
+      razorpayPaymentId: razorpay_payment_id,
+      razorpayOrderId: razorpay_order_id,
+      razorpaySignature: razorpay_signature
+    });
+
+    return res.json({
+      success: true,
+      ...result
+    });
+  } catch (err) {
+    console.error('[Razorpay verification]', err.message);
+
+    return res.status(400).json({
+      success: false,
+      error: err.message || 'Unable to verify the Razorpay payment.'
+    });
   }
 });
 

@@ -32,3 +32,5 @@ Thumbs.db
 
 # Vite temporary files
 vite.config.js.timestamp-*
+
+frenchbell-backup-before-import.dump

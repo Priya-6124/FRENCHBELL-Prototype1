@@ -20,6 +20,19 @@ export async function runMigrations() {
     await tx.query(schemaSql);
   });
 
+    // Add Razorpay order ID support to existing payment records.
+  await db.transaction(async (tx) => {
+    await tx.query(`
+      ALTER TABLE public.payments
+      ADD COLUMN IF NOT EXISTS razorpay_order_id VARCHAR(100);
+    `);
+
+    await tx.query(`
+      CREATE INDEX IF NOT EXISTS idx_payments_razorpay_order_id
+      ON public.payments (razorpay_order_id);
+    `);
+  });
+  
   // Migrate existing orders without deleting any records.
   await db.transaction(async (tx) => {
     await tx.query(`

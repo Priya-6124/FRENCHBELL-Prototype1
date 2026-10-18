@@ -25,6 +25,26 @@ import {
   AlertCircle
 } from 'lucide-react';
 
+function loadRazorpayCheckout() {
+  return new Promise((resolve, reject) => {
+    if (window.Razorpay) {
+      resolve(true);
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.async = true;
+
+    script.onload = () => resolve(true);
+    script.onerror = () => {
+      reject(new Error('Unable to load Razorpay Checkout. Check your internet connection.'));
+    };
+
+    document.body.appendChild(script);
+  });
+}
+
 export default function CheckoutModal({ onClose, onOrderPlaced }) {
   const {
     cart,
@@ -146,7 +166,13 @@ export default function CheckoutModal({ onClose, onOrderPlaced }) {
           coupon_code: appliedOffer?.coupon_code || null,
           delivery_charge: deliveryCharge,
           total: grandTotal,
-          payment_method: paymentMethod === 'cash' ? 'cash' : `simulated_${paymentMethod}_${upiApp}`,
+          
+payment_method: paymentMethod === 'razorpay'
+  ? 'razorpay'
+  : paymentMethod === 'cash'
+    ? 'cash'
+    : `simulated_${paymentMethod}_${upiApp}`,
+
           special_instructions: orderMode === 'dine-in'
             ? dineInDetails.instructions
             : (orderMode === 'takeaway' ? takeawayDetails.instructions : deliveryDetails.instructions),
@@ -180,6 +206,152 @@ export default function CheckoutModal({ onClose, onOrderPlaced }) {
           throw new Error('Order creation could not be confirmed by the server.');
         }
         setCreatedOrder(activeOrder);
+      }
+
+      
+      // Razorpay Test Mode: use the existing order, then verify payment on the server.
+      if (paymentMethod === 'razorpay') {
+        const razorpayOrderRes = await fetch('/api/payment/razorpay/order', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify({
+            order_id: activeOrder.id
+          })
+        });
+
+        const razorpayOrderData = await razorpayOrderRes.json();
+
+        if (!razorpayOrderRes.ok) {
+          throw new Error(
+            razorpayOrderData.error || 'Could not create Razorpay test order.'
+          );
+        }
+
+        await loadRazorpayCheckout();
+
+        // Wait for payment success, failure, or checkout cancellation.
+        const result = await new Promise((resolve, reject) => {
+          let completed = false;
+
+          const checkout = new window.Razorpay({
+            key: razorpayOrderData.key_id,
+            amount: razorpayOrderData.amount,
+            currency: razorpayOrderData.currency || 'INR',
+            name: 'FrenchBell Cafe',
+            description: `Order ${activeOrder.order_number}`,
+            order_id: razorpayOrderData.razorpay_order_id,
+
+            handler: async (response) => {
+              try {
+                const verifyRes = await fetch('/api/payment/razorpay/verify', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { Authorization: `Bearer ${token}` } : {})
+                  },
+                  body: JSON.stringify({
+                    order_id: activeOrder.id,
+                    order_number: activeOrder.order_number,
+                    razorpay_payment_id: response.razorpay_payment_id,
+                    razorpay_order_id: response.razorpay_order_id,
+                    razorpay_signature: response.razorpay_signature
+                  })
+                });
+
+                const verifyData = await verifyRes.json();
+
+                if (!verifyRes.ok || !verifyData.success) {
+                  throw new Error(
+                    verifyData.error || 'Razorpay payment verification failed.'
+                  );
+                }
+
+                completed = true;
+                resolve(verifyData);
+              } catch (error) {
+                completed = true;
+                reject(error);
+              }
+            },
+
+            modal: {
+              ondismiss: () => {
+                if (!completed) {
+                  completed = true;
+                  reject(new Error('Razorpay checkout was cancelled.'));
+                }
+              }
+            },
+
+            theme: {
+              color: '#D4AF37'
+            }
+          });
+
+          checkout.on('payment.failed', (response) => {
+            if (!completed) {
+              completed = true;
+              reject(
+                new Error(
+                  response.error?.description || 'Razorpay payment failed.'
+                )
+              );
+            }
+          });
+
+          checkout.open();
+        });
+
+        // Send the receipt after server-side payment verification succeeds.
+        if (whatsappOptIn) {
+          try {
+            await fetch('/api/receipts/whatsapp', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                ...(token ? { Authorization: `Bearer ${token}` } : {})
+              },
+              body: JSON.stringify({
+                order_id: activeOrder.id,
+                orderNumber: activeOrder.order_number,
+                phone: user.phone
+              })
+            });
+          } catch (waErr) {
+            console.warn('Receipt dispatch notice:', waErr);
+          }
+        }
+
+        setIsProcessingPayment(false);
+        setPaymentSuccess(true);
+        playPaymentSuccessSound();
+
+        try {
+          confetti({
+            particleCount: 90,
+            spread: 70,
+            origin: { y: 0.6 },
+            colors: ['#D4AF37', '#FFF8DC', '#8B5A2B', '#10B981']
+          });
+        } catch (e) {}
+
+        setTimeout(() => {
+          clearCart();
+          if (onClose) onClose();
+
+          if (onOrderPlaced) {
+            onOrderPlaced({
+              ...activeOrder,
+              payment_status: 'successful',
+              payment_method: 'razorpay'
+            });
+          }
+        }, 1200);
+
+        return;
       }
 
       // 2. Server-side payment simulation (records attempt, status, and outcome in database)
@@ -575,12 +747,15 @@ body: JSON.stringify({
                 </label>
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                  {[
-                    { id: 'upi', name: 'UPI Pay', icon: Smartphone, desc: 'GPay / PhonePe / QR' },
-                    { id: 'card', name: 'Card', icon: CreditCard, desc: 'Debit / Credit' },
-                    { id: 'netbanking', name: 'NetBanking', icon: Building, desc: 'All Banks' },
-                    { id: 'cash', name: 'Pay at Cafe', icon: DollarSign, desc: 'Counter / Cash' }
-                  ].map((m) => {
+                  
+{[
+  { id: 'upi', name: 'UPI Pay', icon: Smartphone, desc: 'Dummy UPI' },
+  { id: 'card', name: 'Card', icon: CreditCard, desc: 'Dummy Card' },
+  { id: 'netbanking', name: 'NetBanking', icon: Building, desc: 'Dummy Banking' },
+  { id: 'cash', name: 'Pay at Cafe', icon: DollarSign, desc: 'Cash / Counter' },
+  { id: 'razorpay', name: 'Razorpay Test', icon: CreditCard, desc: 'Secure Test Checkout' }
+].map((m) => {
+
                     const Icon = m.icon;
                     const isSelected = paymentMethod === m.id;
                     return (

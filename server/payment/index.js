@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import getDb from '../db/index.js';
+import Razorpay from 'razorpay';
 
 export class PaymentService {
   /**
@@ -143,29 +144,116 @@ export class PaymentService {
     }
 
     const db = await getDb();
-    const order = await db.get('SELECT * FROM orders WHERE id = ?', [orderId]);
-    if (!order) throw new Error(`Order #${orderNumber} not found.`);
+    const order = await db.get(
+  `SELECT o.*, p.razorpay_order_id
+   FROM orders o
+   INNER JOIN payments p ON p.order_id = o.id
+   WHERE o.id = ?
+     AND p.razorpay_order_id = ?
+     AND p.provider = 'razorpay'
+   ORDER BY p.created_at DESC
+   LIMIT 1`,
+  [orderId, razorpayOrderId]
+);
 
-    // Verify HMAC-SHA256 signature
-    const body = `${razorpayOrderId}|${razorpayPaymentId}`;
-    const expectedSignature = crypto.createHmac('sha256', keySecret).update(body).digest('hex');
+if (!order) {
+  throw new Error(`Order #${orderNumber} not found or Razorpay order does not match.`);
+}
 
-    if (expectedSignature !== razorpaySignature) {
-      await db.run(`
-        INSERT INTO payments (order_id, transaction_id, provider, amount, currency, method, status, error_message)
-        VALUES (?, ?, 'razorpay', ?, 'INR', 'razorpay', 'failed', 'Invalid payment signature verification')
-      `, [order.id, razorpayPaymentId || `FAIL_${Date.now()}`, order.total]);
-      throw new Error('Payment signature verification failed. Untrusted payment submission.');
+if (order.payment_status === 'successful' || order.payment_status === 'paid') {
+  throw new Error(`Order #${orderNumber} has already been paid successfully.`);
+}
+
+    
+    // 1. Verify the payment signature using a constant-time comparison.
+    if (
+      !razorpayPaymentId ||
+      !razorpayOrderId ||
+      !razorpaySignature ||
+      typeof razorpaySignature !== 'string'
+    ) {
+      throw new Error('Required Razorpay payment details are missing.');
     }
+
+    const body = `${razorpayOrderId}|${razorpayPaymentId}`;
+    const expectedSignature = crypto
+      .createHmac('sha256', keySecret)
+      .update(body)
+      .digest('hex');
+
+    const expectedBuffer = Buffer.from(expectedSignature, 'hex');
+    const receivedBuffer = Buffer.from(razorpaySignature, 'hex');
+
+    if (
+      receivedBuffer.length !== expectedBuffer.length ||
+      !crypto.timingSafeEqual(expectedBuffer, receivedBuffer)
+    ) {
+      throw new Error('Payment signature verification failed.');
+    }
+
+    // 2. Fetch the payment directly from Razorpay.
+    const razorpay = new Razorpay({
+      key_id: process.env.RAZORPAY_KEY_ID,
+      key_secret: keySecret
+    });
+
+    let paymentDetails;
+
+    try {
+      paymentDetails = await razorpay.payments.fetch(razorpayPaymentId);
+    } catch (error) {
+      console.error('Razorpay payment lookup failed:', error.message);
+      throw new Error(
+        'Unable to verify the payment with Razorpay. Please check the payment status before retrying.'
+      );
+    }
+
+    // 3. Confirm the payment belongs to this order and has the correct amount.
+    const expectedAmountPaise = Math.round(Number(order.total) * 100);
+
+    if (
+      paymentDetails.order_id !== razorpayOrderId ||
+      Number(paymentDetails.amount) !== expectedAmountPaise ||
+      paymentDetails.currency !== 'INR'
+    ) {
+      throw new Error('Razorpay payment details do not match this order.');
+    }
+
+    // 4. Only captured payments may complete the order.
+    if (paymentDetails.status !== 'captured') {
+      throw new Error(
+        `Razorpay payment is not captured. Current status: ${paymentDetails.status}.`
+      );
+    }
+
 
     // Success transition
     const receiptNumber = `RCP_${order.id}_${Date.now()}`;
     await db.transaction(async (tx) => {
-      await tx.run(`
-        INSERT INTO payments (order_id, transaction_id, provider, amount, currency, method, status)
-        VALUES (?, ?, 'razorpay', ?, 'INR', 'razorpay', 'successful')
-      `, [order.id, razorpayPaymentId, order.total]);
+      const paymentUpdate = await tx.run(`
+  UPDATE payments
+  SET transaction_id = ?,
+      amount = ?,
+      currency = 'INR',
+      method = 'razorpay',
+      status = 'successful',
+      updated_at = CURRENT_TIMESTAMP
+  WHERE order_id = ?
+    AND razorpay_order_id = ?
+    AND provider = 'razorpay'
+    AND status = 'pending'
+`, [
+  razorpayPaymentId,
+  Number(order.total),
+  order.id,
+  razorpayOrderId
+]);
 
+if (!paymentUpdate.changes) {
+  throw new Error(
+    'No pending Razorpay payment was found. The payment may already have been processed.'
+  );
+}
       await tx.run(`
         UPDATE orders
         SET payment_status = 'successful', order_status = 'received', payment_method = 'razorpay', updated_at = CURRENT_TIMESTAMP

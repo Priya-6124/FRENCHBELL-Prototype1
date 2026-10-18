@@ -144,6 +144,7 @@ CREATE TABLE IF NOT EXISTS payments (
   id SERIAL PRIMARY KEY,
   order_id INT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
   transaction_id VARCHAR(100) UNIQUE NOT NULL,
+  razorpay_order_id VARCHAR(100),
   provider VARCHAR(50) NOT NULL DEFAULT 'simulated', -- 'simulated', 'razorpay'
   amount NUMERIC(10, 2) NOT NULL,
   currency VARCHAR(10) DEFAULT 'INR',
