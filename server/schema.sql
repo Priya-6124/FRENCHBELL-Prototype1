@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS menu_items (
   price_veg DECIMAL(10, 2) DEFAULT NULL,
   available TINYINT DEFAULT 1,
   popular TINYINT DEFAULT 0,
+  customizations TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (category_id) REFERENCES menu_categories(id)
 );
@@ -69,6 +70,8 @@ CREATE TABLE IF NOT EXISTS order_items (
   quantity INT NOT NULL,
   unit_price DECIMAL(10, 2) NOT NULL,
   total_price DECIMAL(10, 2) NOT NULL,
+  customizations TEXT,
+  special_instructions TEXT,
   FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
   FOREIGN KEY (menu_item_id) REFERENCES menu_items(id)
 );

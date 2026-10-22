@@ -46,7 +46,9 @@ export default function CustomerManager({ initialTab = 'all' }) {
 
   const fetchOrders = async () => {
     try {
-      const res = await fetch('/api/orders');
+      const res = await fetch('/api/orders', {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      });
       if (res.ok) {
         const data = await res.json();
         setAllOrders(Array.isArray(data) ? data : []);
@@ -120,7 +122,7 @@ export default function CustomerManager({ initialTab = 'all' }) {
     const rows = filteredCustomers.map(c => ({
       name: c.name || 'Valued Foodie',
       phone: `+91 ${c.phone}`,
-      total_orders: c.total_orders || 1,
+      total_orders: c.total_orders || 0,
       total_spent: c.total_spent || c.total_spending || 0,
       preferred_order_type: (c.preferred_order_type || 'takeaway').toUpperCase(),
       last_order_date: c.last_order_date ? new Date(c.last_order_date).toLocaleDateString() : 'Recent'
@@ -381,7 +383,7 @@ export default function CustomerManager({ initialTab = 'all' }) {
 
                       <td className="p-4 font-bold">
                         <span className="px-2 py-0.5 rounded-full bg-french-cream border border-french-gold/30 text-french-dark">
-                          {c.total_orders || 1} Orders
+                          {c.total_orders ?? 0} Orders
                         </span>
                       </td>
 

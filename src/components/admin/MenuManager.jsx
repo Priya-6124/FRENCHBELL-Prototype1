@@ -57,7 +57,7 @@ export default function MenuManager({ initialTab = 'all' }) {
     prep_time_mins: 12,
     is_special: 0,
     is_recommended: 0,
-    customizations: 'Extra Cheese (+₹25), Spicy Dip (+₹20)'
+    customizations: ''
   });
 
   // Toggle Availability (In Stock vs Sold Out)
@@ -245,7 +245,7 @@ export default function MenuManager({ initialTab = 'all' }) {
       prep_time_mins: item.prep_time_mins || 12,
       is_special: item.is_special ? 1 : 0,
       is_recommended: item.is_recommended || item.popular ? 1 : 0,
-      customizations: item.customizations || 'Extra Cheese (+₹25), Spicy Dip (+₹20)'
+      customizations: item.customizations || ''
     });
     setShowAddModal(true);
   };
@@ -268,7 +268,7 @@ export default function MenuManager({ initialTab = 'all' }) {
       prep_time_mins: 12,
       is_special: 0,
       is_recommended: 0,
-      customizations: 'Extra Cheese (+₹25), Spicy Dip (+₹20)'
+      customizations: ''
     });
     setShowAddModal(true);
   };

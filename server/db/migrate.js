@@ -31,6 +31,16 @@ export async function runMigrations() {
       CREATE INDEX IF NOT EXISTS idx_payments_razorpay_order_id
       ON public.payments (razorpay_order_id);
     `);
+
+    await tx.query(`
+      ALTER TABLE public.menu_items
+      ADD COLUMN IF NOT EXISTS customizations TEXT;
+    `);
+
+    await tx.query(`
+      ALTER TABLE public.order_items
+      ADD COLUMN IF NOT EXISTS customizations TEXT;
+    `);
   });
   
   // Migrate existing orders without deleting any records.

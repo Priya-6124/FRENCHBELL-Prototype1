@@ -16,6 +16,12 @@ const candidatePaths = [
 export const envPath = candidatePaths.find(p => fs.existsSync(p)) || candidatePaths[0];
 export const envExists = fs.existsSync(envPath);
 
-export const dotenvResult = dotenv.config({ path: envPath });
+// In test mode, never load .env — the test suite manages its own env vars.
+// Loading .env would overwrite intentionally deleted vars (e.g. DATABASE_URL)
+// and cause tests to hit the live production database instead of pg-mem.
+export const dotenvResult =
+  process.env.NODE_ENV === 'test'
+    ? { parsed: {} }
+    : dotenv.config({ path: envPath });
 
 export default dotenvResult;

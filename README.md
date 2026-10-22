@@ -1,283 +1,193 @@
 # FrenchBell Cafe — Full-Stack Cafe Management System
 
-> A real-world cafe ordering and management platform built for **FrenchBell Cafe, K. Narayanpura, Bengaluru**.
+> A production-ready cafe ordering and operations platform built for **FrenchBell Cafe, K. Narayanpura, Bengaluru**.
 
 ---
 
-## Overview
+## 1. Overview & Architecture
 
-FrenchBell Cafe is a production-ready web application with two clearly separated systems:
+FrenchBell Cafe is a dual-tier web application serving both customer ordering and comprehensive back-office cafe operations:
 
-| System | Access |
-|--------|--------|
-| **Customer App** | Mobile OTP → Browse menu → Cart → Order → Payment → Receipt |
-| **Admin Panel** | Email + Password → Operations Dashboard → Full cafe management |
+| System | Authentication | Core Capabilities |
+|--------|----------------|-------------------|
+| **Customer App** | Mobile Number + 4-Digit OTP | Menu browsing, item customization, cart, order placement (Dine-In / Takeaway / Doorstep Delivery), Razorpay / Pay at Cafe, eReceipts, live status order tracking |
+| **Admin Operations** | Dedicated Email + Password (JWT) | Live kitchen order board, menu & customization manager, customer directory, inventory alerts, table QR codes, coupons, analytics, audit logs, admin invitation management |
 
----
-
-## Tech Stack
-
-| Layer | Technology |
-|-------|-----------|
-| Frontend | React 18, Vite 5, Tailwind CSS v3 |
-| Backend | Node.js, Express.js |
-| Database | JSON flat-file store (`server/frenchbell_db.json`) |
-| Auth | JWT (admin), Mobile OTP (customer) |
-| Animations | Framer Motion |
-| Charts | Recharts |
-| Icons | Lucide React |
-| Email | Nodemailer (SMTP) |
-| Image Upload | Multer / Base64 → `public/assets/uploads/` |
-| Payments | Dummy payment (production-extensible) |
-| WhatsApp | WhatsApp deep link for receipt sharing |
+### Technology Stack
+- **Frontend:** React 18, Vite 5, Tailwind CSS v3, Lucide React icons
+- **Backend:** Node.js, Express.js (ES Modules)
+- **Database:** PostgreSQL (Neon Serverless PostgreSQL or local PostgreSQL); in-memory `pg-mem` engine for isolated test suite execution
+- **Security:** Cryptographic OTP generation (SHA-256 hashed storage), bcrypt password hashing, timing-safe HMAC payment verification, JWT session tokens, advisory transaction locks
 
 ---
 
-## Features
+## 2. Environment Variables
 
-### Customer Side
-- **Splash screen** with animated food portal
-- **Hero section** with live advertisement carousel (admin-managed)
-- **Menu** with categories, veg/non-veg filter, search, and real-time stock status
-- **Cart** with coupon application and live discount calculation
-- **Order modes**: Dine-In (table scan), Takeaway, Delivery
-- **Mobile OTP authentication** — no passwords for customers
-- **Checkout** with UPI, Card, Net Banking, and Cash payment options
-- **Order confirmation** with confetti and order number
-- **Order tracker** — live order status updates
-- **E-Receipt** downloadable receipt after order
-- **WhatsApp receipt** sharing
-- **Offers & Coupons** section with admin-created deals
-- **About & Contact** section with Google Maps embed
+Configure environment variables in `.env` (never commit secrets or real credentials):
 
-### Admin Panel
-- **Dashboard** — 9 live KPI cards, sales graph (today/weekly/monthly), popular items, inventory alerts, recent orders
-- **Orders** — All, New, Preparing, Ready, Out for Delivery, Completed, Cancelled with strict status workflow
-- **Order Detail Drawer** — full order info, status timeline, action buttons
-- **Menu Management** — Add/Edit/Delete items, image upload, stock management, customizations
-- **Category Management** — Add/Edit/Delete categories
-- **Availability & Stock** — inline stock editing, auto out-of-stock trigger
-- **Customer Directory** — spending profiles, order history, Excel export
-- **Customer Orders Register** — all orders filterable by channel
-- **Offers & Coupons** — create coupons with full validation rules
-- **Advertisements** — upload banners, schedule active period, auto-expires
-- **Delivery Management** — delivery area, radius, fee, and order settings
-- **Payments** — transaction log
-- **Receipts** — view, print, WhatsApp send
-- **Analytics & Reports** — sales, orders, fulfillment mix, top products, Excel/CSV export
-- **Notifications** — real-time admin notification feed with unread badge
-- **Settings** — cafe info, business hours, order settings, delivery settings, payment settings
-- **Admin Users** — invite admins by email, manage active/pending/suspended accounts
-- **Activity Logs** — full audit trail of all admin actions
-- **Admin Profile** — change name, change password, view account details
-
-### Admin Authentication
-- Email + password login (separate from customer OTP auth)
-- Forgot password → real email reset link
-- Admin invitation → real invitation email with secure token
-- Invitation tokens: cryptographically secure, single-use, 48–72 hour expiry
-- Last-admin protection — cannot remove/suspend the final active admin
-- Secure password hashing (bcrypt)
-- JWT session tokens
+| Variable Name | Required | Description |
+|---------------|----------|-------------|
+| `PORT` | Optional | Express server port (default: `5000`) |
+| `NODE_ENV` | Yes | Environment mode (`development`, `production`, `test`) |
+| `VERCEL_ENV` | Optional | Set automatically by Vercel (`production` or `preview`) |
+| `DATABASE_URL` | Yes (Dev/Prod) | PostgreSQL connection string (`postgresql://user:pass@host/db?sslmode=require`) |
+| `JWT_SECRET` | Yes | High-entropy secret key for JWT session tokens |
+| `ADMIN_EMAIL` | Yes | Initial primary administrator email for auto-provisioning |
+| `ADMIN_PASSWORD` | Yes | Initial primary administrator password |
+| `TEST_OTP_MODE` | Optional | Set to `true` in development/testing to display generated OTP in the UI banner. **Strictly rejected in production**. |
+| `RAZORPAY_KEY_ID` | Yes (Online Pay) | Razorpay Key ID |
+| `RAZORPAY_KEY_SECRET` | Yes (Online Pay) | Razorpay Key Secret for backend HMAC signature validation |
+| `APP_URL` | Optional | Base URL of the web application for email invitation links |
+| `RECEIPT_DISPATCH_PHONE_NUMBER` | Optional | Dedicated cafe phone number for receipt archival |
+| `SMTP_HOST` | Optional | SMTP mail host for admin invitations and password resets |
+| `SMTP_PORT` | Optional | SMTP port (e.g. `587` or `465`) |
+| `SMTP_USER` | Optional | SMTP username |
+| `SMTP_PASSWORD` | Optional | SMTP password / app password |
 
 ---
 
-## Project Structure
+## 3. Customer OTP Verification Flow
 
-```
-FrenchBell_Prototype/
-├── public/
-│   └── assets/
-│       ├── food/            # Static food images
-│       ├── uploads/         # Admin-uploaded images (auto-created)
-│       └── logo.jfif        # Cafe logo
-├── server/
-│   ├── index.js             # Express API server
-│   ├── db.js                # JSON database layer (PureDb)
-│   ├── frenchbell_db.json   # Live database file
-│   ├── emailService.js      # Nodemailer email service
-│   └── seed.js              # Database seeder
-├── src/
-│   ├── components/
-│   │   ├── admin/           # All admin panel components
-│   │   └── ...              # Customer-facing components
-│   ├── context/
-│   │   ├── AppContext.jsx   # Global customer state
-│   │   └── AuthContext.jsx  # Auth state (customer OTP + admin JWT)
-│   ├── utils/
-│   │   ├── excelExport.js   # Excel report generator
-│   │   └── audio.js         # No-op stubs (sound removed)
-│   └── App.jsx              # Root app routing
-├── .env                     # Local environment variables (not committed)
-├── .env.example             # Environment variable template
-├── package.json
-└── vite.config.js
-```
+- **Secure Backend Generation:** The server generates a cryptographically secure 4-digit code using `crypto.randomInt(1000, 10000)` and stores only its SHA-256 hash.
+- **Testing Mode (`TEST_OTP_MODE=true`):** When enabled in non-production environments, the backend returns the generated OTP to the UI, which displays it in a visible banner inside the OTP verification modal. This allows full verification testing without requiring an active third-party SMS gateway.
+- **No Universal Hardcoded OTP:** Universal codes (e.g., `1234` or fixed development bypasses) are completely removed.
+- **Security Controls:**
+  - OTPs expire after 5 minutes.
+  - Single-use: Deleted immediately upon successful verification.
+  - Rate limiting: Maximum 5 requests per 15 minutes per phone number.
+  - Resend cooldown: 60-second enforced timer.
+  - Maximum 3 incorrect attempts before invalidation.
+  - Production safeguard: The server refuses to boot if `TEST_OTP_MODE=true` is detected in production.
 
 ---
 
-## Environment Variables
+## 4. Payments and Receipts
 
-Copy `.env.example` to `.env` and fill in your values:
+FrenchBell Cafe supports exactly two customer payment flows:
 
-```env
-# Server
-PORT=3001
-NODE_ENV=development
-
-# JWT
-JWT_SECRET=your_jwt_secret_here
-
-# Admin Email (SMTP)
-EMAIL_FROM=noreply@frenchbellcafe.com
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USER=your_gmail@gmail.com
-SMTP_PASSWORD=your_app_password
-
-# App URL (for email links)
-APP_URL=http://localhost:5173
-```
-
-> **Never commit your `.env` file.** It is already in `.gitignore`.
+1. **Razorpay Online:**
+   - Frontend initializes the checkout using the official Razorpay SDK.
+   - The server verifies payment authenticity using constant-time HMAC SHA-256 signature verification against `RAZORPAY_KEY_SECRET`.
+   - The server verifies the captured payment amount directly with the Razorpay API.
+   - Orders are marked as `successful` only after successful backend verification.
+   - The authentic Razorpay Payment ID (`pay_...`) is recorded as `transaction_id` and displayed on customer eReceipts and admin order details.
+2. **Pay at Cafe (Cash):**
+   - Customer places order without upfront online payment.
+   - Order is recorded with `payment_status = 'pending'`.
+   - Orders remain unpaid until cafe staff confirms receipt of cash and updates the status.
+3. **Simulated Payment Safeguard:**
+   - The simulated payment endpoint (`/api/payment/simulate`) is restricted exclusively to testing/development environments.
+   - Any attempt to access payment simulation in production returns HTTP 403 Forbidden.
 
 ---
 
-## Getting Started
+## 5. Order Management & Numbering
+
+- **Daily Order Numbering:** Generates sequences starting from `FB001`, `FB002`, etc.
+- **2:00 AM Reset:** The business day boundary resets at **2:00 AM IST (Asia/Kolkata)**. Orders placed between midnight and 01:59 belong to the previous day's shift.
+- **Concurrency Protection:** PostgreSQL advisory transaction locks prevent race conditions during simultaneous order placement.
+- **Status Lifecycle Workflow:**
+  - Normal/Dine-In/Takeaway: `received` → `accepted` → `preparing` → `ready` → `completed`
+  - Delivery: `received` → `accepted` → `preparing` → `ready` → `out_for_delivery` → `completed`
+  - Backward status transitions are strictly prohibited by the backend.
+
+---
+
+## 6. Item Customization
+
+- **Menu Configuration:** Admins can configure customization options per item (e.g., `Extra Cheese (+₹30), Peri Peri Drizzle (+₹20)`).
+- **Customer Selection:** Customers select options in the food detail modal with live price recalculation.
+- **Persistence & Propagation:** Selected options are validated against server-side menu rules, saved in `order_items.customizations`, and displayed in the cart, checkout modal, order tracker, admin order detail drawer, and digital receipts.
+
+---
+
+## 7. Customer Directory & Order History
+
+- **Admin All Customers Page:** Real customer accounts from the PostgreSQL database with aggregated metrics (`total_orders`, `total_spent`, `last_order_date`), search filters, and Excel export.
+- **Customer Order History:** Authenticated endpoint (`/api/customer/orders`) strictly scoped to the logged-in user's identity and verified phone number.
+- **Order Tracking:** Accessible at `/api/orders/:orderNumber/track` with authorization verification (JWT customer/admin token or verified phone number matching the order). Hardcoded/mock orders are excluded.
+
+---
+
+## 8. Development & Build Commands
 
 ### Prerequisites
-- Node.js 18+
+- Node.js 18+ (tested on Node.js 20 and Node.js 24)
 - npm 9+
+- PostgreSQL database (Neon or local)
 
 ### Installation
-
 ```bash
-git clone https://github.com/yourusername/frenchbell-cafe.git
-cd frenchbell-cafe
 npm install
 ```
 
-### Setup Environment
-
+### Database Migration
+Run safe database schema migrations (creates missing tables and indexes idempotently without dropping data):
 ```bash
-cp .env.example .env
-# Edit .env with your SMTP credentials and JWT secret
+node server/db/migrate.js
 ```
 
-### Seed the Database
-
-```bash
-npm run seed
-```
-
-This creates the initial database with sample menu items, categories, and a default admin account.
-
-**Default Admin Login:**
-```
-Email:    admin@frenchbellcafe.com
-Password: admin123
-```
-> Change this immediately after first login.
-
-### Run Development Server
-
+### Start Development Server
+Starts the Express API server and Vite frontend concurrently:
 ```bash
 npm run dev
 ```
 
-This starts both the Vite frontend (`http://localhost:5173`) and the Express API (`http://localhost:3001`) concurrently.
+### Run Comprehensive Automated Test Suite
+Runs all 31 backend integration tests against the isolated in-memory PostgreSQL engine (`pg-mem`), completely isolated from the live production database:
+```bash
+node --experimental-vm-modules scripts/test-suite.js
+```
 
-### Production Build
-
+### Frontend Production Build
+Validates JSX, bundle dependencies, and generates minified static assets in `dist/`:
 ```bash
 npm run build
+```
+
+### Run Production Server
+Serves static assets and runs the API server:
+```bash
 npm run server
 ```
 
 ---
 
-## Key API Endpoints
+## 9. Deployment Guidance (Vercel)
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/auth/admin-login` | Admin email/password login |
-| POST | `/api/auth/forgot-password` | Send password reset email |
-| POST | `/api/auth/reset-password` | Confirm password reset |
-| POST | `/api/auth/invite-admin` | Send admin invitation email |
-| POST | `/api/auth/accept-invitation` | Accept invite and create account |
-| GET | `/api/menu` | Get all menu items |
-| POST | `/api/menu` | Create menu item (admin) |
-| PUT | `/api/menu/:id` | Update menu item (admin) |
-| GET | `/api/orders` | Get all orders |
-| POST | `/api/orders` | Place customer order |
-| PUT | `/api/orders/:id/status` | Update order status (admin) |
-| GET | `/api/customers` | Get customer directory (admin) |
-| GET | `/api/analytics/summary` | Dashboard analytics |
-| POST | `/api/upload` | Upload image (admin) |
-| GET | `/api/offers` | Get active coupons |
-| GET | `/api/advertisements` | Get active advertisements |
-| GET | `/api/settings` | Get cafe settings |
+1. Connect the repository to Vercel.
+2. Configure Environment Variables in Project Settings:
+   - `DATABASE_URL`: Connection string to Neon PostgreSQL database.
+   - `JWT_SECRET`: Secret string for authentication tokens.
+   - `ADMIN_EMAIL` & `ADMIN_PASSWORD`: Primary admin credentials.
+   - `RAZORPAY_KEY_ID` & `RAZORPAY_KEY_SECRET`: Production Razorpay keys.
+   - `TEST_OTP_MODE`: Set to `false` (or omit) in Production.
+3. The root `vercel.json` routes `/api/*` to the serverless entry point and serves frontend static assets for client-side routing.
 
 ---
 
-## Admin Panel Navigation
+## 10. Database Schema Overview
 
-```
-Dashboard
-Orders           → All / New / Preparing / Ready / Out for Delivery / Completed / Cancelled
-Menu             → Menu Items / Categories / Availability
-Customers        → All Customers / Customer Orders
-Offers & Coupons → Coupons / Promotions
-Advertisements   → Active / Scheduled / Add Advertisement
-Delivery         → Orders / Delivery Area / Delivery Settings
-Transactions     (Payments)
-Receipts
-Analytics        → Sales / Orders / Customers / Products / Export Reports
-Notifications
-Settings         → Cafe Info / Business Hours / Order Settings / Delivery / Payment / Admin Users / Activity Logs
-```
+The database consists of 17 active relational tables (all actively utilized by the application):
 
----
+| Table | Purpose |
+|-------|---------|
+| `users` | Customers (phone auth) and administrators (email/password auth) |
+| `menu_categories` | Menu classification hierarchy |
+| `menu_items` | Dishes, variants, pricing, stock quantities, and customizations |
+| `customer_otps` | Mobile OTP hash store with expiry and rate limiting |
+| `orders` | Order headers, business days, totals, payment and order status |
+| `order_items` | Order item details, variants, selected customizations, and notes |
+| `order_status_history` | Audit trail of all order lifecycle status transitions |
+| `payments` | Transaction logs, Razorpay payment IDs, and provider responses |
+| `receipts` | Digital tax invoice records and delivery statuses |
+| `admin_invitations` | Administrator invitation tokens, expiration, and acceptance state |
+| `activity_logs` | Tamper-evident admin audit trail (suspensions, edits, logins) |
+| `settings` | Cafe metadata, operating hours, delivery fees, and tax rates |
+| `offers` | Coupons and promotional deals |
+| `advertisements` | Scheduled promotional hero banner carousel items |
+| `inventory` | Raw ingredient stocks, reorder thresholds, and unit costs |
+| `admin_notifications` | Real-time back-office notification feed |
+| `tables` | Dine-in tables and generated QR codes |
 
-## Order Status Workflow
-
-```
-Normal / Takeaway / Dine-In:
-  New → Accepted → Preparing → Ready → Completed
-
-Delivery:
-  New → Accepted → Preparing → Ready → Out for Delivery → Delivered
-```
-
-Invalid backward transitions are rejected by the backend.
-
----
-
-## Data Consistency
-
-All admin changes instantly propagate to the customer side:
-
-- **Menu image upload** → customer sees it on next page load
-- **Item disabled / out of stock** → customer cannot add to cart
-- **Coupon created** → customer can apply at checkout
-- **Advertisement activated** → appears on homepage carousel
-- **Price changed** → customer sees new price
-- **Delivery settings changed** → customer checkout reflects updated rules
-
----
-
-## Security
-
-- Admin routes protected by JWT middleware (`authenticateToken + requireAdmin`)
-- Customer OTP auth is completely separate from admin auth
-- Passwords hashed with bcrypt (cost factor 10)
-- Invitation tokens are cryptographically secure, single-use, time-limited
-- Password reset tokens expire and are invalidated after use
-- No secrets committed to repository
-- Input validated on both client and server
-
----
-
-## License
-
-Private — FrenchBell Cafe. All rights reserved.
+> **Note:** All tables contain active application data or support active administrative functionality. No tables should be dropped.

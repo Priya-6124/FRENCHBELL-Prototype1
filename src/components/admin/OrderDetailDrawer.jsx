@@ -238,8 +238,13 @@ export default function OrderDetailDrawer({ order, onClose, onStatusUpdated }) {
                       {it.item_name} <span className="text-french-muted font-mono font-normal">× {it.quantity}</span>
                     </span>
                     {it.variant && (
-                      <span className="text-[10px] font-bold text-french-gold uppercase">
+                      <span className="text-[10px] font-bold text-french-gold uppercase mr-2">
                         {it.variant}
+                      </span>
+                    )}
+                    {it.customizations && (
+                      <span className="text-[10px] text-french-muted block">
+                        + {it.customizations}
                       </span>
                     )}
                   </div>
@@ -279,22 +284,44 @@ export default function OrderDetailDrawer({ order, onClose, onStatusUpdated }) {
           </div>
 
           {/* 7. Payment Info (Payment ID, Method, Status) */}
-          <div className="p-3.5 rounded-2xl bg-french-cream/60 border border-french-gold/20 flex items-center justify-between text-xs">
-            <div className="flex items-center gap-2.5">
-              <CreditCard className="w-4 h-4 text-french-gold shrink-0" />
-              <div>
-                <span className="font-bold text-french-dark block uppercase text-[10px]">Payment Details</span>
-                <span className="text-french-dark font-mono uppercase font-bold text-xs">{order.payment_method || 'UPI'}</span>
-                <span className="text-french-muted font-mono text-[10px] block mt-0.5">
-                  Payment ID: <strong className="text-french-dark">{order.transaction_id || order.payment_id || `TXN_${order.id || '9823'}_PAID`}</strong>
+          {(() => {
+            const isPayAtCafe = order.payment_method === 'cash';
+            const rawTxnId = order.transaction_id || order.payment?.transaction_id || order.payment_id;
+            const txnIdDisplay = isPayAtCafe
+              ? 'Not applicable'
+              : (rawTxnId && !rawTxnId.startsWith('rzp_order_')
+                ? rawTxnId
+                : 'Not available');
+            const isPaid = order.payment_status === 'successful' || order.payment_status === 'paid';
+            const isFailed = order.payment_status === 'failed';
+
+            return (
+              <div className="p-3.5 rounded-2xl bg-french-cream/60 border border-french-gold/20 flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2.5">
+                  <CreditCard className="w-4 h-4 text-french-gold shrink-0" />
+                  <div>
+                    <span className="font-bold text-french-dark block uppercase text-[10px]">Payment Details</span>
+                    <span className="text-french-dark font-mono uppercase font-bold text-xs">
+                      {isPayAtCafe ? 'Pay at Cafe (Cash)' : (order.payment_method || 'Razorpay').toUpperCase()}
+                    </span>
+                    <span className="text-french-muted font-mono text-[10px] block mt-0.5">
+                      Payment ID: <strong className="text-french-dark font-mono">{txnIdDisplay}</strong>
+                    </span>
+                  </div>
+                </div>
+
+                <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase ${
+                  isPaid
+                    ? 'bg-emerald-500/20 text-emerald-800 border border-emerald-500/30'
+                    : isFailed
+                    ? 'bg-red-500/20 text-red-800 border border-red-500/30'
+                    : 'bg-amber-500/20 text-amber-800 border border-amber-500/30'
+                }`}>
+                  {order.payment_status || 'pending'}
                 </span>
               </div>
-            </div>
-
-            <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase bg-emerald-500/20 text-emerald-800 border border-emerald-500/30">
-              {order.payment_status || 'PAID'}
-            </span>
-          </div>
+            );
+          })()}
 
         </div>
 

@@ -12,6 +12,8 @@ export default function FoodCard({ item }) {
 
   const isOutOfStock = item.available === 0 || (item.stock_quantity !== undefined && Number(item.stock_quantity) <= 0);
 
+  const hasCustomizations = Boolean(item.customizations && String(item.customizations).trim()) || Boolean(item.price_chicken || item.price_veg);
+
   // Clicking the card opens the detailed modal
   const handleCardClick = () => {
     setSelectedFood(item);
@@ -22,6 +24,12 @@ export default function FoodCard({ item }) {
   const handleAddClick = (e) => {
     e.stopPropagation();
     if (isOutOfStock) return;
+
+    if (hasCustomizations) {
+      setSelectedFood(item);
+      setActiveModal('foodDetails');
+      return;
+    }
 
     addToCart(item, 1, {
       variant: null,
@@ -117,6 +125,11 @@ export default function FoodCard({ item }) {
             <span className="font-serif font-extrabold text-xl text-french-dark">
               ₹{item.price}
             </span>
+            {hasCustomizations && (
+              <span className="text-[9px] text-french-gold font-bold block mt-0.5">
+                Customisable
+              </span>
+            )}
           </div>
 
           {/* Add to Cart Button */}
@@ -141,6 +154,11 @@ export default function FoodCard({ item }) {
                     {cartItemsCount}
                   </span>
                   <span>Added</span>
+                </>
+              ) : hasCustomizations ? (
+                <>
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Customise</span>
                 </>
               ) : (
                 <>

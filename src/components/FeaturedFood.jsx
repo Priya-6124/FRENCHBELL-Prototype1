@@ -2,7 +2,7 @@ import React from 'react';
 import { useApp } from '../context/AppContext';
 import FoodCard from './FoodCard';
 import CurvedUnderline from './CurvedUnderline';
-import { Flame, ArrowRight } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 
 export default function FeaturedFood({ onExploreMenu }) {
   const { menuItems, setCurrentView } = useApp();
@@ -24,11 +24,6 @@ export default function FeaturedFood({ onExploreMenu }) {
 
         {/* Section Header */}
         <div className="text-center max-w-2xl mx-auto mb-12 space-y-3">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-french-gold/15 text-french-warm text-xs font-bold uppercase tracking-wider">
-            <Flame className="w-4 h-4 text-french-amber" />
-            <span>FrenchBell Specialties</span>
-          </div>
-
           <h2 className="font-serif font-extrabold text-3xl sm:text-4xl lg:text-5xl text-french-dark tracking-tight">
             Popular Customer Favorites
           </h2>

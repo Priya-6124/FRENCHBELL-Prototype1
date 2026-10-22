@@ -48,9 +48,6 @@ export default function MenuSection() {
         
         {/* Section Header */}
         <div className="text-center max-w-2xl mx-auto mb-8 space-y-2">
-          <span className="font-serif text-2xl sm:text-3xl text-french-gold font-bold block">
-            Pick Your Craving
-          </span>
           <h2 className="font-serif font-extrabold text-3xl sm:text-4xl lg:text-5xl text-french-dark tracking-tight">
             Complete Menu
           </h2>

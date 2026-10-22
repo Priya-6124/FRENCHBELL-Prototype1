@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS menu_items (
   prep_time_mins INT DEFAULT 12,
   is_special SMALLINT DEFAULT 0,
   is_recommended SMALLINT DEFAULT 0,
+  customizations TEXT,
   created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
@@ -119,6 +120,7 @@ CREATE TABLE IF NOT EXISTS order_items (
   quantity INT NOT NULL,
   unit_price NUMERIC(10, 2) NOT NULL,
   total_price NUMERIC(10, 2) NOT NULL,
+  customizations TEXT,
   special_instructions TEXT,
   created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );

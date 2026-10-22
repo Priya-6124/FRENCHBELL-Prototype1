@@ -2,11 +2,18 @@ import assert from 'assert';
 
 process.env.NODE_ENV = 'test';
 process.env.TEST_OTP_MODE = 'true';
-process.env.DEV_FIXED_OTP = '1234';
+delete process.env.DEV_FIXED_OTP;
 process.env.ADMIN_EMAIL = 'manager@frenchbellcafe.com';
 process.env.ADMIN_PASSWORD = 'FrenchBell@2026!';
 delete process.env.DATABASE_URL;
 delete process.env.PGHOST;
+delete process.env.SMTP_USER;
+delete process.env.SMTP_USERNAME;
+delete process.env.SMTP_PASS;
+delete process.env.SMTP_PASSWORD;
+delete process.env.RESEND_API_KEY;
+delete process.env.SENDGRID_API_KEY;
+delete process.env.BREVO_API_KEY;
 
 const { default: app } = await import('../server/index.js');
 const { default: getDb } = await import('../server/db/index.js');
@@ -345,31 +352,37 @@ try {
 
   // --- 5. CUSTOMER TEST OTP AUTHENTICATION ---
   console.log('\n5. Customer Mobile OTP Authentication:');
-  await test('Send OTP in test mode returns fixed OTP 1234 without sending real SMS', async () => {
+  let receivedOtp;
+  await test('Send OTP generates random 4-digit OTP (1000-9999) on backend in test mode', async () => {
     const res = await request('/api/auth/send-otp', {
       method: 'POST',
       body: JSON.stringify({ phone: '9123456780' })
     });
     assert.strictEqual(res.status, 200);
-    assert.strictEqual(res.body.testOtp, '1234');
+    assert(typeof res.body.testOtp === 'string');
+    assert(/^\d{4}$/.test(res.body.testOtp), 'OTP must be 4 digits');
+    const numericOtp = parseInt(res.body.testOtp, 10);
+    assert(numericOtp >= 1000 && numericOtp <= 9999, 'OTP must be between 1000 and 9999');
     assert.strictEqual(res.body.isTestMode, true);
+    receivedOtp = res.body.testOtp;
   });
 
   await test('Verify OTP with wrong code is rejected', async () => {
+    const wrongOtp = receivedOtp === '9999' ? '8888' : '9999';
     const res = await request('/api/auth/verify-otp', {
       method: 'POST',
-      body: JSON.stringify({ phone: '9123456780', otp: '9999' })
+      body: JSON.stringify({ phone: '9123456780', otp: wrongOtp })
     });
     assert.strictEqual(res.status, 400);
     assert(res.body.error.includes('Incorrect verification code'));
   });
 
-  await test('Verify OTP with 1234 creates customer account and returns JWT', async () => {
+  await test('Verify OTP with generated OTP creates customer account and returns JWT', async () => {
     const res = await request('/api/auth/verify-otp', {
       method: 'POST',
       body: JSON.stringify({
         phone: '9123456780',
-        otp: '1234',
+        otp: receivedOtp,
         name: 'Priya Sharma',
         whatsapp_opt_in: true
       })
@@ -386,7 +399,7 @@ try {
   await test('OTP is single-use and cannot be re-verified', async () => {
     const res = await request('/api/auth/verify-otp', {
       method: 'POST',
-      body: JSON.stringify({ phone: '9123456780', otp: '1234' })
+      body: JSON.stringify({ phone: '9123456780', otp: receivedOtp })
     });
     assert.strictEqual(res.status, 400);
   });
@@ -478,8 +491,15 @@ try {
     assert.strictEqual(res.body.orders[0].order_number, placedOrderNumber);
   });
 
-  await test('Order tracking endpoint returns order status and transition history', async () => {
+  await test('Order tracking rejects unauthorized requests without token or phone', async () => {
     const res = await request(`/api/orders/${placedOrderNumber}/track`);
+    assert.strictEqual(res.status, 401);
+  });
+
+  await test('Order tracking endpoint returns order status with customer authorization', async () => {
+    const res = await request(`/api/orders/${placedOrderNumber}/track`, {
+      headers: { 'Authorization': `Bearer ${testCustomerToken}` }
+    });
     assert.strictEqual(res.status, 200);
     assert.strictEqual(res.body.order_status, 'received');
     assert(res.body.history.length >= 2, 'Should have order creation and payment entries in history');

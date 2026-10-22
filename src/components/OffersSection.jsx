@@ -1,6 +1,6 @@
 import React from 'react';
 import { useApp } from '../context/AppContext';
-import { Sparkles, ArrowRight, Tag, Clock } from 'lucide-react';
+import { ArrowRight, Clock } from 'lucide-react';
 import CurvedUnderline from './CurvedUnderline';
 
 export default function OffersSection({ onExploreClick }) {
@@ -59,11 +59,6 @@ export default function OffersSection({ onExploreClick }) {
 
         {/* Section Heading */}
         <div className="text-center max-w-2xl mx-auto mb-12 sm:mb-14 space-y-2">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-french-gold/20 text-french-gold text-xs font-extrabold uppercase tracking-widest border border-french-gold/30">
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Curated Cafe Deals</span>
-          </div>
-
           <div>
             <h2 className="font-serif font-extrabold text-3xl sm:text-4xl lg:text-5xl text-french-cream tracking-tight">
               Deals Worth <span className="text-french-gold">The Craving</span>

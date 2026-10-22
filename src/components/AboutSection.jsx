@@ -40,11 +40,6 @@ export default function AboutSection() {
 
           {/* Right Column: Cafe Introduction, Philosophy & Story */}
           <div className="lg:col-span-7 space-y-6">
-            <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-french-gold/15 text-french-dark text-xs font-bold uppercase tracking-wider">
-              <Sparkles className="w-4 h-4 text-french-gold" />
-              <span>Authentic Cafe Experience</span>
-            </div>
-
             {/* Heading with Curved Underline */}
             <div>
               <h2 className="font-serif font-extrabold text-3xl sm:text-4xl lg:text-5xl text-french-dark tracking-tight leading-tight">

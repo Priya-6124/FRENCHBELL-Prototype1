@@ -314,10 +314,18 @@ export async function initDatabase() {
 
   if (!hasPgUrl && isTest) {
     // Isolated In-Memory PostgreSQL Engine for Automated Tests
-    const { newDb } = await import('pg-mem');
+    const { newDb, DataType } = await import('pg-mem');
     const memDb = newDb();
-    
-    // Register custom functions needed by PostgreSQL schema if any
+
+    // Register no-op advisory lock for pg-mem (not needed in single-threaded tests)
+    memDb.public.registerFunction({
+      name: 'pg_advisory_xact_lock',
+      args: [DataType.integer, DataType.integer],
+      returns: DataType.void,
+      implementation: () => null
+    });
+
+    // Register current_timestamp override
     memDb.public.registerFunction({
       name: 'current_timestamp',
       args: [],
@@ -347,6 +355,13 @@ export async function initDatabase() {
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 5000
   });
+
+  try {
+    await pool.query('ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS customizations TEXT');
+    await pool.query('ALTER TABLE order_items ADD COLUMN IF NOT EXISTS customizations TEXT');
+  } catch (migErr) {
+    // Non-fatal if table not yet migrated or already exists
+  }
 
   dbInstance = new PgDatabase(pool, false);
   return dbInstance;

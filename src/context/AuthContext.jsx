@@ -91,6 +91,7 @@ export function AuthProvider({ children }) {
 
       setToken(data.token);
       setUser(data.user);
+      setLastGeneratedOtp(null);
       setLoading(false);
       return data;
     } catch (err) {

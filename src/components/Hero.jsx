@@ -2,7 +2,7 @@ import React from 'react';
 import { useApp } from '../context/AppContext';
 import BannerCarousel from './BannerCarousel';
 import CurvedUnderline from './CurvedUnderline';
-import { Compass, Sparkles, ArrowRight, Utensils, Bike } from 'lucide-react';
+import { Compass, ArrowRight, Utensils, Bike } from 'lucide-react';
 
 export default function Hero({ onExploreClick }) {
   const { advertisements, lockedTableNumber, orderMode, setOrderMode } = useApp();
@@ -45,11 +45,6 @@ export default function Hero({ onExploreClick }) {
         {/* Customer-Attracting Welcome Marketing Message */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-5 pt-1">
           <div className="space-y-2 max-w-2xl">
-            <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-french-gold/20 border border-french-gold/30 text-french-gold text-[11px] font-extrabold uppercase tracking-wider">
-              <Sparkles className="w-3 h-3 text-french-gold" />
-              <span>Gourmet Cafe & Kitchen • Bengaluru</span>
-            </div>
-
             <h1 className="font-serif font-extrabold text-2xl sm:text-4xl lg:text-[42px] text-french-cream tracking-tight leading-[1.15]">
               Your cravings called.{' '}
               <span className="text-french-gold inline-block">FrenchBell answered.</span>

@@ -239,6 +239,12 @@ export default function CartDrawer() {
                             </span>
                           )}
 
+                          {item.customizations && (
+                            <span className="text-[10px] font-semibold text-french-gold block truncate mt-0.5">
+                              + {item.customizations}
+                            </span>
+                          )}
+
                           {item.specialInstructions && (
                             <p className="text-[11px] text-french-muted italic truncate mt-0.5">
                               "{item.specialInstructions}"

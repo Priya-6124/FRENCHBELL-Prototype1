@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { Tag, Check, Clock, Sparkles, Percent, ShoppingBag } from 'lucide-react';
+import { Tag, Check, Clock, Copy } from 'lucide-react';
 import CurvedUnderline from './CurvedUnderline';
 
 export default function CouponsSection({ onExploreClick }) {
-  const { offers, setAppliedOffer, addNotification, setCartOpen } = useApp();
+  const { offers } = useApp();
   const [copiedCode, setCopiedCode] = useState(null);
 
   // Available coupons from admin offers system
@@ -50,10 +50,10 @@ export default function CouponsSection({ onExploreClick }) {
 
   const activeCoupons = coupons.length > 0 ? coupons : defaultCoupons;
 
-  const handleApply = (coupon) => {
-    setAppliedOffer(coupon);
+  // Copy coupon code to clipboard; coupon is applied at checkout
+  const handleCopyCode = (coupon) => {
+    navigator.clipboard?.writeText(coupon.coupon_code).catch(() => {});
     setCopiedCode(coupon.coupon_code);
-    addNotification('Coupon Applied', `Coupon code "${coupon.coupon_code}" activated!`, 'success');
     setTimeout(() => setCopiedCode(null), 3000);
   };
 
@@ -63,11 +63,6 @@ export default function CouponsSection({ onExploreClick }) {
         
         {/* Section Heading with Hand-drawn Underline */}
         <div className="text-center max-w-2xl mx-auto mb-10 sm:mb-12 space-y-2">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-french-gold/15 text-french-dark text-xs font-bold uppercase tracking-wider">
-            <Tag className="w-3.5 h-3.5 text-french-gold" />
-            <span>Smart Savings</span>
-          </div>
-
           <div>
             <h2 className="font-serif font-extrabold text-3xl sm:text-4xl text-french-dark tracking-tight">
               Exclusive Cafe <span className="text-french-warm">Coupons</span>
@@ -78,7 +73,7 @@ export default function CouponsSection({ onExploreClick }) {
           </div>
 
           <p className="text-french-muted text-xs sm:text-sm">
-            Apply active coupons before checkout to maximize your delicious savings.
+            Copy a coupon code and enter it at checkout to save on your order.
           </p>
         </div>
 
@@ -123,26 +118,27 @@ export default function CouponsSection({ onExploreClick }) {
                   </div>
                 </div>
 
-                {/* Coupon Code & Action Bar */}
+                {/* Coupon Code & Copy Button */}
                 <div className="pt-4 border-t border-french-gold/20 flex items-center justify-between gap-3">
-                  <div className="px-3.5 py-1.5 rounded-xl bg-french-cream border border-french-gold/40 font-mono font-extrabold text-xs sm:text-sm text-french-dark tracking-wider">
+                  <div className="px-3.5 py-1.5 rounded-xl bg-french-cream border border-french-gold/40 font-mono font-extrabold text-xs sm:text-sm text-french-dark tracking-wider select-all">
                     {c.coupon_code}
                   </div>
 
                   <button
                     type="button"
-                    onClick={() => handleApply(c)}
+                    onClick={() => handleCopyCode(c)}
                     className="px-4 py-2 rounded-xl bg-french-dark text-french-gold font-bold text-xs uppercase tracking-wider hover:bg-french-gold hover:text-french-dark transition-all duration-200 flex items-center gap-1.5 shadow-sm"
+                    title="Copy coupon code"
                   >
                     {isCopied ? (
                       <>
                         <Check className="w-3.5 h-3.5 stroke-[3]" />
-                        <span>Applied</span>
+                        <span>Copied!</span>
                       </>
                     ) : (
                       <>
-                        <Tag className="w-3.5 h-3.5" />
-                        <span>Apply</span>
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>Copy</span>
                       </>
                     )}
                   </button>

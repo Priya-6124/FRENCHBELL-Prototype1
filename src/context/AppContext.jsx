@@ -214,17 +214,22 @@ export function AppProvider({ children }) {
 
   // Cart Functions
   const addToCart = (item, qty = 1, options = {}) => {
-    const { variant = null, specialInstructions = '' } = options;
+    const { variant = null, specialInstructions = '', selectedCustomizations = [], price = null } = options;
 
     setCartAnimate(true);
     setTimeout(() => setCartAnimate(false), 400);
 
-    let unitPrice = item.price;
-    if (variant === 'Veg' && item.price_veg) unitPrice = item.price_veg;
-    if (variant === 'Chicken' && item.price_chicken) unitPrice = item.price_chicken;
+    // Use price passed from modal (already includes customization extras + variant price)
+    // Fall back to computing it if not provided
+    let unitPrice = price !== null ? Number(price) : Number(item.price);
+    if (price === null) {
+      if (variant === 'Veg' && item.price_veg) unitPrice = Number(item.price_veg);
+      if (variant === 'Chicken' && item.price_chicken) unitPrice = Number(item.price_chicken);
+    }
 
-    // Unique key combines item id, variant, and instructions
-    const cartItemId = `${item.id}-${variant || 'std'}-${specialInstructions.slice(0, 20)}`;
+    // Unique key: item id + variant + customizations + instructions
+    const customKey = selectedCustomizations.length > 0 ? selectedCustomizations.slice().sort().join(',') : '';
+    const cartItemId = `${item.id}-${variant || 'std'}-${customKey.slice(0, 30)}-${specialInstructions.slice(0, 10)}`;
 
     setCart(prev => {
       const existing = prev.find(i => i.cartItemId === cartItemId);
@@ -237,6 +242,8 @@ export function AppProvider({ children }) {
           name: item.name,
           variant,
           specialInstructions,
+          selectedCustomizations,
+          customizations: selectedCustomizations.length > 0 ? selectedCustomizations.join(', ') : null,
           price: unitPrice,
           quantity: qty,
           image_url: item.image_url,

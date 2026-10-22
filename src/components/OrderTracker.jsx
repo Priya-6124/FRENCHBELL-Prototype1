@@ -5,7 +5,7 @@ import { X, CheckCircle, Clock, Bell, Download, AlertTriangle, RefreshCw, XCircl
 
 export default function OrderTracker({ order: propOrder, onClose }) {
   const { activeOrder } = useApp();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const order = propOrder || activeOrder || {
     order_number: 'FB1042',
     customer_name: 'Guest Customer',
@@ -20,11 +20,14 @@ export default function OrderTracker({ order: propOrder, onClose }) {
   const [status, setStatus] = useState(order.order_status || 'received');
   const [pollingActive, setPollingActive] = useState(true);
   const [lastRefreshed, setLastRefreshed] = useState(new Date());
+  const [isLoading, setIsLoading] = useState(false);
+  const [trackError, setTrackError] = useState('');
 
   const fetchLiveStatus = useCallback(async () => {
     if (!order.order_number) return;
     try {
-      const res = await fetch(`/api/orders/${order.order_number}/track`, {
+      const phoneParam = order.phone || user?.phone ? `?phone=${encodeURIComponent(order.phone || user?.phone)}` : '';
+      const res = await fetch(`/api/orders/${order.order_number}/track${phoneParam}`, {
         headers: token ? { 'Authorization': `Bearer ${token}` } : {}
       });
       if (res.ok) {
@@ -33,16 +36,25 @@ export default function OrderTracker({ order: propOrder, onClose }) {
           setLiveOrder(data);
           setStatus(data.order_status);
           setLastRefreshed(new Date());
+          setTrackError('');
           // Stop polling on terminal states
           if (data.order_status === 'completed' || data.order_status === 'cancelled') {
             setPollingActive(false);
           }
         }
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        if (res.status === 401 || res.status === 403 || res.status === 404) {
+          setTrackError(errData.error || 'Unable to authorize or find this order.');
+          setPollingActive(false);
+        }
       }
     } catch (e) {
-      // Silent — polling should never crash the UI
+      // Silent on network glitch
+    } finally {
+      setIsLoading(false);
     }
-  }, [order.order_number, token]);
+  }, [order.order_number, order.phone, user?.phone, token]);
 
   // Poll every 5 seconds while order is active
   useEffect(() => {
@@ -128,6 +140,17 @@ export default function OrderTracker({ order: propOrder, onClose }) {
             </h3>
           </div>
         </div>
+
+        {/* Tracking Error Alert */}
+        {trackError && (
+          <div className="p-4 rounded-2xl border bg-red-500/10 border-red-500/30 text-red-700 flex items-start gap-3 text-sm">
+            <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold">Tracking Notice</p>
+              <p className="text-xs mt-0.5">{trackError}</p>
+            </div>
+          </div>
+        )}
 
         {/* Cancelled / Payment Failed Alert */}
         {(isCancelled || isPaymentFailed) && (

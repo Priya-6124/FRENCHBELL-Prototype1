@@ -11,6 +11,22 @@ export default function EReceiptModal({ order, onClose }) {
     order.payment_method &&
     String(order.payment_method).toLowerCase().includes('simulated');
 
+  const isPayAtCafe =
+    order.payment_method === 'cash' ||
+    String(order.payment_method || '').toLowerCase() === 'cash';
+
+  // Resolve transaction ID from multiple possible fields
+  const resolvedTxnId =
+    order.transaction_id ||
+    order.payment?.transaction_id ||
+    null;
+
+  const txnIdDisplay = isPayAtCafe
+    ? 'Not applicable'
+    : (resolvedTxnId && !resolvedTxnId.startsWith('rzp_order_')
+      ? resolvedTxnId
+      : 'Not available');
+
   const handleDownloadPdf = () => {
     window.open(`/api/receipts/${order.order_number}/download`, '_blank');
     addNotification('Receipt Downloaded', 'Digital PDF receipt generated successfully', 'success');
@@ -76,7 +92,7 @@ export default function EReceiptModal({ order, onClose }) {
             <span className="font-bold text-french-dark font-mono text-sm">#{order.order_number || 'FB1042'}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-french-muted">Date & Time:</span>
+            <span className="text-french-muted">Date &amp; Time:</span>
             <span className="font-medium text-french-dark">{new Date(order.created_at || Date.now()).toLocaleString()}</span>
           </div>
           <div className="flex justify-between">
@@ -111,6 +127,12 @@ export default function EReceiptModal({ order, onClose }) {
                 : (order.payment_method || 'Cash').toUpperCase()}
             </span>
           </div>
+          <div className="flex justify-between items-center">
+            <span className="text-french-muted">Transaction ID:</span>
+            <span className={`font-mono text-right max-w-[180px] truncate text-[11px] ${resolvedTxnId ? 'font-bold text-french-dark' : 'text-french-muted italic'}`}>
+              {txnIdDisplay}
+            </span>
+          </div>
         </div>
 
         {/* Items Purchased List */}
@@ -125,8 +147,11 @@ export default function EReceiptModal({ order, onClose }) {
             {order.items && order.items.length > 0 ? (
               order.items.map((it, idx) => (
                 <div key={idx} className="flex justify-between text-french-dark font-medium">
-                  <span className="truncate max-w-[160px]">
+                  <span className="truncate max-w-[140px]">
                     {it.item_name} {it.variant ? `(${it.variant})` : ''}
+                    {it.customizations && (
+                      <span className="block text-[10px] text-french-muted font-normal">+ {it.customizations}</span>
+                    )}
                   </span>
                   <span>{it.quantity} × ₹{Number(it.unit_price).toFixed(2)}</span>
                   <span className="font-bold font-mono">₹{Number(it.total_price).toFixed(2)}</span>

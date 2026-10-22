@@ -61,7 +61,7 @@ export default function CheckoutModal({ onClose, onOrderPlaced }) {
     clearCart,
     addNotification
   } = useApp();
-  const { user, token, sendOtp, verifyOtp } = useAuth();
+  const { user, token, sendOtp, verifyOtp, lastGeneratedOtp } = useAuth();
 
   // If user is not logged in, prompt Mobile OTP inside checkout
   const [authStep, setAuthStep] = useState(user ? 'ready' : 'phone'); // 'ready' | 'phone' | 'otp'
@@ -72,8 +72,8 @@ export default function CheckoutModal({ onClose, onOrderPlaced }) {
   const [isSendingOtp, setIsSendingOtp] = useState(false);
   const [whatsappOptIn, setWhatsappOptIn] = useState(true);
 
-  // Payment Selection
-  const [paymentMethod, setPaymentMethod] = useState('upi'); // 'upi' | 'card' | 'netbanking' | 'cash'
+  // Payment Selection: Razorpay and Pay at Cafe only
+  const [paymentMethod, setPaymentMethod] = useState('razorpay'); // 'razorpay' | 'cash'
   const [upiApp, setUpiApp] = useState('gpay'); // 'gpay' | 'phonepe' | 'paytm' | 'qr'
   const [simulatedOutcome, setSimulatedOutcome] = useState('success'); // 'success' | 'failure'
   const [createdOrder, setCreatedOrder] = useState(null); // Prevents duplicate order creation on retry
@@ -167,19 +167,15 @@ export default function CheckoutModal({ onClose, onOrderPlaced }) {
           delivery_charge: deliveryCharge,
           total: grandTotal,
           
-payment_method: paymentMethod === 'razorpay'
-  ? 'razorpay'
-  : paymentMethod === 'cash'
-    ? 'cash'
-    : `simulated_${paymentMethod}_${upiApp}`,
-
+          payment_method: paymentMethod === 'razorpay' ? 'razorpay' : 'cash',
           special_instructions: orderMode === 'dine-in'
             ? dineInDetails.instructions
             : (orderMode === 'takeaway' ? takeawayDetails.instructions : deliveryDetails.instructions),
           items: cart.map(i => ({
             menu_item_id: i.id,
             item_name: i.name,
-            variant: i.variant,
+            variant: i.variant || null,
+            customizations: i.customizations || i.selectedCustomizations || null,
             quantity: i.quantity,
             unit_price: i.price,
             total_price: i.price * i.quantity,
@@ -354,82 +350,38 @@ payment_method: paymentMethod === 'razorpay'
         return;
       }
 
-      // 2. Server-side payment simulation (records attempt, status, and outcome in database)
-      const simRes = await fetch('/api/payment/simulate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        },
-
-body: JSON.stringify({
-  order_id: activeOrder.id,
-  order_number: activeOrder.order_number,
-  outcome: simulatedOutcome,
-  method: paymentMethod === 'cash' ? 'cash' : `simulated_${paymentMethod}_${upiApp}`
-})
-
-      });
-
-      const simData = await simRes.json();
-
-      if (!simRes.ok || simData.success === false) {
+      // 2. Pay at Cafe: order is placed, payment recorded as pending until admin confirms
+      if (paymentMethod === 'cash') {
         setIsProcessingPayment(false);
-        const errMsg = simData.message || simData.error || 'Simulated payment failed as requested.';
-        setPaymentError(`Payment Failed (Simulation): ${errMsg}`);
-        addNotification(
-          'Simulated Payment Failed',
-          `Order #${activeOrder.order_number} marked as failed. Switch to "Simulate Success" and click Retry.`,
-          'error'
-        );
+        setPaymentSuccess(true);
+        playPaymentSuccessSound();
+
+        try {
+          confetti({
+            particleCount: 90,
+            spread: 70,
+            origin: { y: 0.6 },
+            colors: ['#D4AF37', '#FFF8DC', '#8B5A2B', '#10B981']
+          });
+        } catch (e) {}
+
+        setTimeout(() => {
+          clearCart();
+          if (onClose) onClose();
+          if (onOrderPlaced) {
+            onOrderPlaced({
+              ...activeOrder,
+              payment_status: 'pending',
+              payment_method: 'cash'
+            });
+          }
+        }, 1200);
+
         return;
       }
 
-
-      // 3. Dispatch receipt confirmation if opted in
-      if (whatsappOptIn) {
-        try {
-          await fetch('/api/receipts/whatsapp', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              order_id: activeOrder.id,
-              orderNumber: activeOrder.order_number,
-              phone: user.phone
-            })
-          });
-        } catch (waErr) {
-          console.warn('Receipt dispatch notice:', waErr);
-        }
-      }
-
-
-      // 4. Success UI sequence
-      setIsProcessingPayment(false);
-      setPaymentSuccess(true);
-      playPaymentSuccessSound();
-
-      // Confetti explosion
-      try {
-        confetti({
-          particleCount: 90,
-          spread: 70,
-          origin: { y: 0.6 },
-          colors: ['#D4AF37', '#FFF8DC', '#8B5A2B', '#10B981']
-        });
-      } catch (e) {}
-
-      setTimeout(() => {
-        clearCart();
-        if (onClose) onClose();
-        if (onOrderPlaced) {
-          onOrderPlaced({
-            ...activeOrder,
-            payment_status: 'successful',
-            payment_method: paymentMethod === 'cash' ? 'cash' : `simulated_${paymentMethod}_${upiApp}`
-          });
-        }
-      }, 1200);
+      // 3. This path should not be reached for supported methods (razorpay / cash handled above)
+      throw new Error('Unsupported payment method. Please select Razorpay or Pay at Cafe.');
 
     } catch (err) {
       setIsProcessingPayment(false);
@@ -499,9 +451,13 @@ body: JSON.stringify({
                 Please verify your 10-digit mobile number to confirm your order, receive your digital receipt, and get live preparation updates.
               </p>
 
-              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-800 text-xs font-semibold text-center">
-                ⚠️ <strong>Development Notice:</strong> Test OTP mode active. Fixed code is <span className="font-mono bg-amber-200 px-1.5 py-0.5 rounded text-french-dark font-black">1234</span>. Real SMS is disabled.
-              </div>
+              {lastGeneratedOtp && (
+                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-800 text-xs font-semibold text-center">
+                  ⚠️ <strong>Testing Mode:</strong> Enter{' '}
+                  <span className="font-mono bg-amber-200 px-1.5 py-0.5 rounded text-french-dark font-black">{lastGeneratedOtp}</span>{' '}
+                  — real SMS is disabled.
+                </div>
+              )}
 
               {authError && (
                 <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-700 text-xs font-semibold flex items-center gap-2 text-left">
@@ -685,77 +641,18 @@ body: JSON.stringify({
                 </div>
               )}
 
-              {/* Simulated Test Payment Sandbox Notice */}
-              <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-900 text-xs space-y-1">
-                <div className="flex items-center gap-2 font-bold uppercase tracking-wider text-[11px] text-amber-800">
-                  <Sparkles className="w-3.5 h-3.5 text-french-gold shrink-0" />
-                  <span>Simulated Payment Provider (Test Mode)</span>
-                </div>
-                <p className="text-[11px] text-french-dark/80">
-                  This checkout is running in dummy test mode. No real money or bank accounts will be charged. Sensitive credentials (card numbers, CVVs, UPI PINs) are never collected.
-                </p>
-              </div>
-
-              {/* Simulation Outcome Controls */}
-              <div className="p-3.5 rounded-2xl bg-french-cream border border-french-gold/30 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold uppercase tracking-wider text-french-dark">
-                    Test Mode: Simulate Payment Outcome
-                  </span>
-                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-french-dark text-french-gold">
-                    SANDBOX
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setSimulatedOutcome('success')}
-                    className={`p-2.5 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-                      simulatedOutcome === 'success'
-                        ? 'bg-emerald-700 text-white border-emerald-800 shadow'
-                        : 'bg-french-card text-french-dark border-french-gold/25 hover:border-emerald-600'
-                    }`}
-                  >
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span>Simulate Success</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSimulatedOutcome('failure')}
-                    className={`p-2.5 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-                      simulatedOutcome === 'failure'
-                        ? 'bg-red-700 text-white border-red-800 shadow'
-                        : 'bg-french-card text-french-dark border-french-gold/25 hover:border-red-600'
-                    }`}
-                  >
-                    <AlertCircle className="w-4 h-4" />
-                    <span>Simulate Failure</span>
-                  </button>
-                </div>
-                {createdOrder && (
-                  <div className="text-[11px] text-french-dark/70 font-mono pt-1">
-                    Retrying on existing Order <strong>#{createdOrder.order_number}</strong> (prevents duplicate orders).
-                  </div>
-                )}
-              </div>
-
-              {/* Payment Method Selector */}
+              {/* Payment Method Selector — Razorpay and Pay at Cafe only */}
               <div className="space-y-3">
                 <label className="block text-xs font-bold uppercase tracking-wider text-french-dark flex items-center gap-1.5">
                   <Lock className="w-3.5 h-3.5 text-french-gold" />
-                  <span>Simulated Payment Instrument</span>
+                  <span>Payment Method</span>
                 </label>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                  
-{[
-  { id: 'upi', name: 'UPI Pay', icon: Smartphone, desc: 'Dummy UPI' },
-  { id: 'card', name: 'Card', icon: CreditCard, desc: 'Dummy Card' },
-  { id: 'netbanking', name: 'NetBanking', icon: Building, desc: 'Dummy Banking' },
-  { id: 'cash', name: 'Pay at Cafe', icon: DollarSign, desc: 'Cash / Counter' },
-  { id: 'razorpay', name: 'Razorpay Test', icon: CreditCard, desc: 'Secure Test Checkout' }
-].map((m) => {
-
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { id: 'razorpay', name: 'Pay Online', icon: CreditCard, desc: 'Razorpay — Cards, UPI, NetBanking' },
+                    { id: 'cash', name: 'Pay at Cafe', icon: DollarSign, desc: 'Pay cash at counter' }
+                  ].map((m) => {
                     const Icon = m.icon;
                     const isSelected = paymentMethod === m.id;
                     return (
@@ -763,7 +660,7 @@ body: JSON.stringify({
                         key={m.id}
                         type="button"
                         onClick={() => setPaymentMethod(m.id)}
-                        className={`p-3 rounded-2xl border text-center transition-all flex flex-col items-center justify-center gap-1 ${
+                        className={`p-4 rounded-2xl border text-center transition-all flex flex-col items-center justify-center gap-1.5 ${
                           isSelected
                             ? 'bg-french-dark text-french-gold border-french-gold shadow-md'
                             : 'bg-french-cream/70 text-french-dark border-french-gold/25 hover:border-french-gold'
@@ -771,84 +668,18 @@ body: JSON.stringify({
                       >
                         <Icon className="w-5 h-5" />
                         <span className="font-bold text-xs">{m.name}</span>
-                        <span className="text-[9px] text-french-muted">{m.desc}</span>
+                        <span className="text-[9px] opacity-70">{m.desc}</span>
                       </button>
                     );
                   })}
                 </div>
+
+                {paymentMethod === 'cash' && (
+                  <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-medium">
+                    Your order will be placed and payment collected at the cafe counter. The order will remain <strong>unpaid</strong> until the cafe records payment.
+                  </div>
+                )}
               </div>
-
-              {/* UPI Options */}
-              {paymentMethod === 'upi' && (
-                <div className="p-4 rounded-2xl bg-french-cream border border-french-gold/30 space-y-3">
-                  <span className="text-xs font-bold uppercase tracking-wider text-french-dark block">
-                    Choose UPI Option
-                  </span>
-                  <div className="grid grid-cols-4 gap-2">
-                    {[
-                      { id: 'gpay', label: 'Google Pay' },
-                      { id: 'phonepe', label: 'PhonePe' },
-                      { id: 'paytm', label: 'Paytm' },
-                      { id: 'qr', label: 'Scan QR' }
-                    ].map((app) => (
-                      <button
-                        key={app.id}
-                        type="button"
-                        onClick={() => setUpiApp(app.id)}
-                        className={`py-2 px-2 rounded-xl text-center border text-xs font-bold transition-all ${
-                          upiApp === app.id
-                            ? 'bg-french-gold text-french-dark border-french-dark shadow'
-                            : 'bg-french-card border-french-gold/20 text-french-dark hover:border-french-gold'
-                        }`}
-                      >
-                        {app.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  {upiApp === 'qr' && (
-                    <div className="p-3 rounded-xl bg-french-card border border-french-gold/30 text-center space-y-2">
-                      <div className="w-24 h-24 mx-auto bg-white p-2 rounded-lg border border-french-gold/40 flex items-center justify-center">
-                        <QrCode className="w-20 h-20 text-french-dark" />
-                      </div>
-                      <span className="text-[11px] text-french-muted block font-mono">
-                        frenchbell@upi • ₹{grandTotal}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Card Simulation */}
-              {paymentMethod === 'card' && (
-                <div className="p-4 rounded-2xl bg-french-cream border border-french-gold/30 space-y-3">
-                  <span className="text-xs font-bold uppercase tracking-wider text-french-dark block">
-                    Card Information (Sandbox Verification)
-                  </span>
-                  <div className="space-y-2">
-                    <input
-                      type="text"
-                      value={cardDetails.number}
-                      readOnly
-                      className="w-full px-3 py-2 rounded-xl border border-french-gold/30 bg-french-card font-mono text-xs font-bold"
-                    />
-                    <div className="grid grid-cols-2 gap-2">
-                      <input
-                        type="text"
-                        value={cardDetails.expiry}
-                        readOnly
-                        className="px-3 py-2 rounded-xl border border-french-gold/30 bg-french-card font-mono text-xs"
-                      />
-                      <input
-                        type="text"
-                        value={cardDetails.cvv}
-                        readOnly
-                        className="px-3 py-2 rounded-xl border border-french-gold/30 bg-french-card font-mono text-xs"
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
 
               {/* WhatsApp Opt-in Reminder */}
               <div className="flex items-center gap-2.5 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-900 text-xs">
@@ -863,31 +694,27 @@ body: JSON.stringify({
                 type="button"
                 onClick={handleExecutePayment}
                 disabled={isProcessingPayment || paymentSuccess}
-                className={`w-full py-4 rounded-2xl font-extrabold text-sm uppercase tracking-wider shadow-xl hover:scale-[1.02] active:scale-[0.99] transition-all flex items-center justify-center gap-2 disabled:opacity-60 ${
-                  simulatedOutcome === 'failure'
-                    ? 'bg-red-700 text-white hover:bg-red-800'
-                    : 'bg-gradient-to-r from-french-gold via-french-gold-hover to-[#C09C2E] text-french-dark gold-glow'
-                }`}
+                className="w-full py-4 rounded-2xl font-extrabold text-sm uppercase tracking-wider shadow-xl hover:scale-[1.02] active:scale-[0.99] transition-all flex items-center justify-center gap-2 disabled:opacity-60 bg-gradient-to-r from-french-gold via-french-gold-hover to-[#C09C2E] text-french-dark gold-glow"
               >
                 {isProcessingPayment ? (
                   <>
                     <Loader2 className="w-5 h-5 animate-spin" />
-                    <span>{createdOrder ? 'Retrying Payment...' : 'Placing Order...'}</span>
+                    <span>{createdOrder ? 'Processing Payment...' : 'Placing Order...'}</span>
                   </>
                 ) : paymentSuccess ? (
                   <>
                     <CheckCircle2 className="w-5 h-5 text-emerald-800" />
-                    <span>Payment Confirmed ✓ [TEST/SIMULATED]</span>
+                    <span>Order Confirmed ✓</span>
                   </>
-                ) : simulatedOutcome === 'failure' ? (
+                ) : paymentMethod === 'cash' ? (
                   <>
-                    <AlertCircle className="w-5 h-5" />
-                    <span>{createdOrder ? 'Retry with Failure Simulation' : `Test Failure — ₹${grandTotal}`}</span>
+                    <ShieldCheck className="w-5 h-5" />
+                    <span>Place Order — Pay ₹{grandTotal} at Cafe</span>
                   </>
                 ) : (
                   <>
                     <ShieldCheck className="w-5 h-5" />
-                    <span>{createdOrder ? `Retry Payment — ₹${grandTotal} [TEST]` : `Pay ₹${grandTotal} — Simulated [TEST]`}</span>
+                    <span>{createdOrder ? `Retry Payment — ₹${grandTotal}` : `Pay ₹${grandTotal} via Razorpay`}</span>
                   </>
                 )}
               </button>

@@ -1,6 +1,51 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import { X, Plus, Minus, ShoppingCart, Check, Ban } from 'lucide-react';
+
+/**
+ * Parse a customizations string from the menu item into selectable options.
+ * Format examples: "Extra Cheese (+₹25), Spicy Dip (+₹20)" or "No Onion, Extra Sauce"
+ */
+function parseSingleOption(item) {
+  if (!item || typeof item !== 'string' || !item.trim()) return null;
+  const match = item.match(/^(.+?)(?:\s*[\(\-]\s*\+?\s*(?:₹|Rs\.?|INR)?\s*(\d+(?:\.\d+)?)\s*\)?)?$/i);
+  if (match) {
+    const name = match[1].trim();
+    const price = match[2] ? parseFloat(match[2]) : 0;
+    return { name, price, label: price > 0 ? `${name} (+₹${price})` : name };
+  }
+  return { name: item.trim(), price: 0, label: item.trim() };
+}
+
+function parseCustomizations(customizationsInput) {
+  if (!customizationsInput) return [];
+  if (Array.isArray(customizationsInput)) {
+    return customizationsInput.map(item => {
+      if (typeof item === 'object' && item !== null) {
+        const name = (item.name || item.label || '').trim();
+        const price = Number(item.price) || 0;
+        return { name, price, label: price > 0 ? `${name} (+₹${price})` : name };
+      }
+      return parseSingleOption(String(item));
+    }).filter(Boolean);
+  }
+  if (typeof customizationsInput === 'string') {
+    const trimmed = customizationsInput.trim();
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) return parseCustomizations(parsed);
+      } catch (e) {}
+    }
+    return trimmed
+      .split(/[,;|\n]/)
+      .map(s => s.trim())
+      .filter(Boolean)
+      .map(parseSingleOption)
+      .filter(Boolean);
+  }
+  return [];
+}
 
 export default function FoodDetailsModal({ onClose }) {
   const { selectedFood, addToCart, updateCartItemDetails } = useApp();
@@ -11,14 +56,53 @@ export default function FoodDetailsModal({ onClose }) {
 
   const [quantity, setQuantity] = useState(selectedFood.quantity || 1);
   const [specialInstructions, setSpecialInstructions] = useState(selectedFood.specialInstructions || '');
+  const [selectedCustomizations, setSelectedCustomizations] = useState(() => {
+    // Pre-populate if editing cart item
+    if (selectedFood.selectedCustomizations && Array.isArray(selectedFood.selectedCustomizations)) {
+      return selectedFood.selectedCustomizations;
+    }
+    return [];
+  });
 
-  const unitPrice = selectedFood.price;
+  // Variant selector: shown when item has price_chicken or price_veg
+  const hasVariants = Boolean(selectedFood.price_chicken || selectedFood.price_veg);
+  const [selectedVariant, setSelectedVariant] = useState(() => {
+    if (selectedFood.variant) return selectedFood.variant;
+    if (selectedFood.price_chicken && !selectedFood.price_veg) return 'Chicken';
+    return null;
+  });
+
+  // Parse available customizations from the menu item
+  const customizationOptions = useMemo(() => parseCustomizations(selectedFood.customizations), [selectedFood.customizations]);
+
+  // Toggle a customization option
+  const toggleCustomization = (optName) => {
+    setSelectedCustomizations(prev =>
+      prev.includes(optName)
+        ? prev.filter(n => n !== optName)
+        : [...prev, optName]
+    );
+  };
+
+  // Base price from variant selection
+  const getBasePrice = () => {
+    if (selectedVariant === 'Veg' && selectedFood.price_veg) return Number(selectedFood.price_veg);
+    if (selectedVariant === 'Chicken' && selectedFood.price_chicken) return Number(selectedFood.price_chicken);
+    return Number(selectedFood.price);
+  };
+
+  // Extra cost from selected customizations
+  const customizationExtra = useMemo(() => {
+    return customizationOptions
+      .filter(opt => selectedCustomizations.includes(opt.name))
+      .reduce((sum, opt) => sum + opt.price, 0);
+  }, [customizationOptions, selectedCustomizations]);
+
+  const unitPrice = getBasePrice() + customizationExtra;
   const totalPrice = unitPrice * quantity;
 
   // Sanitize text input
-  const sanitizeText = (text) => {
-    return text.replace(/[<>]/g, '').trim();
-  };
+  const sanitizeText = (text) => text.replace(/[<>]/g, '').trim();
 
   const handleAction = () => {
     if (isOutOfStock && !isCartEdit) return;
@@ -29,12 +113,16 @@ export default function FoodDetailsModal({ onClose }) {
       updateCartItemDetails(selectedFood.cartItemId, {
         quantity,
         specialInstructions: cleanInstructions,
-        price: unitPrice
+        price: unitPrice,
+        selectedCustomizations,
+        variant: selectedVariant
       });
     } else {
       addToCart(selectedFood, quantity, {
-        variant: null,
-        specialInstructions: cleanInstructions
+        variant: selectedVariant,
+        specialInstructions: cleanInstructions,
+        selectedCustomizations,
+        price: unitPrice
       });
     }
 
@@ -101,7 +189,7 @@ export default function FoodDetailsModal({ onClose }) {
         </div>
 
         {/* Scrollable Content */}
-        <div className="p-6 overflow-y-auto space-y-6 flex-1 text-french-dark">
+        <div className="p-6 overflow-y-auto space-y-5 flex-1 text-french-dark">
 
           {/* Item Name, Base Price & Description */}
           <div>
@@ -122,11 +210,14 @@ export default function FoodDetailsModal({ onClose }) {
                 </div>
               </div>
 
-              <div className="text-right">
+              <div className="text-right shrink-0">
                 <span className="text-[10px] text-french-muted uppercase tracking-wider block font-bold">Price</span>
                 <span className="font-serif font-extrabold text-2xl text-french-dark">
                   ₹{unitPrice}
                 </span>
+                {customizationExtra > 0 && (
+                  <span className="text-[10px] text-french-muted block">+₹{customizationExtra} extras</span>
+                )}
               </div>
             </div>
 
@@ -135,7 +226,98 @@ export default function FoodDetailsModal({ onClose }) {
             </p>
           </div>
 
-          {/* Text-Only Special Instructions Customization */}
+          {/* Variant Selector (Chicken / Veg) */}
+          {hasVariants && (
+            <div className="space-y-2">
+              <label className="block text-xs font-bold uppercase tracking-wider text-french-dark">
+                Choose Variant
+              </label>
+              <div className="flex gap-2 flex-wrap">
+                {/* Default / base variant */}
+                {!selectedFood.price_veg && !selectedFood.price_chicken && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedVariant(null)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${
+                      !selectedVariant
+                        ? 'bg-french-dark text-french-gold border-french-gold'
+                        : 'bg-french-cream border-french-gold/30 text-french-dark hover:border-french-gold'
+                    }`}
+                  >
+                    Regular — ₹{selectedFood.price}
+                  </button>
+                )}
+                {selectedFood.price_chicken && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedVariant('Chicken')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${
+                      selectedVariant === 'Chicken'
+                        ? 'bg-french-dark text-french-gold border-french-gold'
+                        : 'bg-french-cream border-french-gold/30 text-french-dark hover:border-french-gold'
+                    }`}
+                  >
+                    Chicken — ₹{selectedFood.price_chicken}
+                  </button>
+                )}
+                {selectedFood.price_veg && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedVariant('Veg')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${
+                      selectedVariant === 'Veg'
+                        ? 'bg-french-dark text-french-gold border-french-gold'
+                        : 'bg-french-cream border-french-gold/30 text-french-dark hover:border-french-gold'
+                    }`}
+                  >
+                    Veg — ₹{selectedFood.price_veg}
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Customizations (from menu item's customizations field) */}
+          {customizationOptions.length > 0 && (
+            <div className="space-y-2">
+              <label className="block text-xs font-bold uppercase tracking-wider text-french-dark">
+                Add-ons &amp; Customizations
+              </label>
+              <div className="grid grid-cols-1 gap-2">
+                {customizationOptions.map((opt) => {
+                  const isSelected = selectedCustomizations.includes(opt.name);
+                  return (
+                    <button
+                      key={opt.name}
+                      type="button"
+                      onClick={() => toggleCustomization(opt.name)}
+                      className={`flex items-center justify-between px-3 py-2 rounded-xl border text-xs font-medium transition-all ${
+                        isSelected
+                          ? 'bg-french-dark text-french-gold border-french-gold'
+                          : 'bg-french-cream/70 border-french-gold/25 text-french-dark hover:border-french-gold'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
+                          isSelected ? 'bg-french-gold border-french-gold' : 'border-french-gold/40'
+                        }`}>
+                          {isSelected && <Check className="w-3 h-3 text-french-dark" strokeWidth={3} />}
+                        </div>
+                        <span>{opt.name}</span>
+                      </div>
+                      {opt.price > 0 && (
+                        <span className={`font-bold ${isSelected ? 'text-french-gold' : 'text-french-muted'}`}>
+                          +₹{opt.price}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Special Instructions Textarea */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <label className="block text-xs font-bold uppercase tracking-wider text-french-dark">

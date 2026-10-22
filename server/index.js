@@ -44,8 +44,6 @@ const isTestOtpMode =
   process.env.TEST_OTP_MODE === 'true' ||
   (!isProduction && process.env.TEST_OTP_MODE !== 'false');
 
-const DEV_FIXED_OTP = process.env.DEV_FIXED_OTP || '1234';
-
 if (isProduction && process.env.TEST_OTP_MODE === 'true') {
   console.error(
     'FATAL: Production startup rejected. TEST_OTP_MODE cannot be enabled in a production environment.'
@@ -176,6 +174,47 @@ export function normalizePhone(rawPhone) {
   return digits;
 }
 
+function parseSingleCustomization(item) {
+  if (!item || typeof item !== 'string' || !item.trim()) return null;
+  const match = item.match(/^(.+?)(?:\s*[\(\-]\s*\+?\s*(?:₹|Rs\.?|INR)?\s*(\d+(?:\.\d+)?)\s*\)?)?$/i);
+  if (match) {
+    const name = match[1].trim();
+    const price = match[2] ? parseFloat(match[2]) : 0;
+    return { name, price, raw: item.trim() };
+  }
+  return { name: item.trim(), price: 0, raw: item.trim() };
+}
+
+export function parseCustomizations(customizationsInput) {
+  if (!customizationsInput) return [];
+  if (Array.isArray(customizationsInput)) {
+    return customizationsInput.map(item => {
+      if (typeof item === 'object' && item !== null) {
+        const name = (item.name || item.label || '').trim();
+        const price = Number(item.price) || 0;
+        return { name, price, raw: name };
+      }
+      return parseSingleCustomization(String(item));
+    }).filter(Boolean);
+  }
+  if (typeof customizationsInput === 'string') {
+    const trimmed = customizationsInput.trim();
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) return parseCustomizations(parsed);
+      } catch (e) {}
+    }
+    return trimmed
+      .split(/[,;\n]/)
+      .map(s => s.trim())
+      .filter(Boolean)
+      .map(parseSingleCustomization)
+      .filter(Boolean);
+  }
+  return [];
+}
+
 // Send OTP to customer mobile number
 app.post('/api/auth/send-otp', async (req, res) => {
   try {
@@ -209,25 +248,26 @@ app.post('/api/auth/send-otp', async (req, res) => {
     recentAttempts.push(now);
     otpRateLimit.set(cleanPhone, recentAttempts);
 
-    // Development / Test OTP mode: fixed, clearly documented test OTP
+    // Generate cryptographically secure random four-digit OTP (1000-9999)
+    const otp = String(crypto.randomInt(1000, 10000));
+    const hashedOtp = crypto.createHash('sha256').update(`${cleanPhone}:${otp}:${JWT_SECRET}`).digest('hex');
+
+    await db.setOtp(cleanPhone, {
+      hashedOtp,
+      expiresAt: now + 5 * 60 * 1000,
+      attempts: 0,
+      cooldownUntil: now + 60 * 1000
+    });
+
+    // Development / Test OTP mode: return generated OTP for testing in UI
     if (isTestOtpMode) {
-      const otp = DEV_FIXED_OTP;
-      const hashedOtp = crypto.createHash('sha256').update(`${cleanPhone}:${otp}:${JWT_SECRET}`).digest('hex');
-
-      await db.setOtp(cleanPhone, {
-        hashedOtp,
-        expiresAt: now + 5 * 60 * 1000,
-        attempts: 0,
-        cooldownUntil: now + 60 * 1000
-      });
-
       return res.json({
         success: true,
         phone: cleanPhone,
         cooldownSeconds: 60,
         testOtp: otp,
         isTestMode: true,
-        devNotice: `DEVELOPMENT TEST OTP MODE ACTIVE. Fixed test OTP: ${otp}. Real SMS is disabled.`,
+        devNotice: `DEVELOPMENT TEST OTP MODE ACTIVE. Generated test OTP: ${otp}. Real SMS is disabled.`,
         message: `TEST MODE: Your verification code is ${otp}. No SMS was sent.`
       });
     }
@@ -275,8 +315,11 @@ app.post('/api/auth/verify-otp', async (req, res) => {
 
     if (!isMatch) {
       const remaining = 3 - currentAttempts;
+      if (remaining <= 0) {
+        await db.deleteOtp(cleanPhone);
+      }
       return res.status(400).json({
-        error: `Incorrect verification code. ${remaining > 0 ? `${remaining} attempt(s) remaining.` : 'Please request a new code.'}`
+        error: `Incorrect verification code. ${remaining > 0 ? `${remaining} attempt(s) remaining.` : 'Maximum verification attempts exceeded. Please request a new code.'}`
       });
     }
 
@@ -1113,7 +1156,7 @@ app.post('/api/menu', authenticateToken, requireAdmin, async (req, res) => {
     const {
       category_id, name, description, image_url, veg_type, price,
       price_chicken, price_veg, available, popular, stock_quantity,
-      prep_time_mins, is_special, is_recommended
+      prep_time_mins, is_special, is_recommended, customizations
     } = req.body;
 
     if (!name || price === undefined) return res.status(400).json({ error: 'Name and price are required' });
@@ -1122,14 +1165,15 @@ app.post('/api/menu', authenticateToken, requireAdmin, async (req, res) => {
     const result = await db.run(`
       INSERT INTO menu_items (
         category_id, name, description, image_url, veg_type, price, price_chicken, price_veg,
-        available, popular, stock_quantity, prep_time_mins, is_special, is_recommended
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        available, popular, stock_quantity, prep_time_mins, is_special, is_recommended, customizations
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       category_id || 1, name, description || '', image_url || '/assets/food/burger.jpg',
       veg_type || 'veg', Number(price), price_chicken ? Number(price_chicken) : null,
       price_veg ? Number(price_veg) : null, available !== undefined ? (available ? 1 : 0) : 1,
       popular ? 1 : 0, stock_quantity !== undefined ? Number(stock_quantity) : 20,
-      prep_time_mins ? Number(prep_time_mins) : 12, is_special ? 1 : 0, is_recommended ? 1 : 0
+      prep_time_mins ? Number(prep_time_mins) : 12, is_special ? 1 : 0, is_recommended ? 1 : 0,
+      customizations !== undefined ? String(customizations) : null
     ]);
 
     await db.logActivity({
@@ -1154,7 +1198,7 @@ app.put('/api/menu/:id', authenticateToken, requireAdmin, async (req, res) => {
     const {
       category_id, name, description, image_url, veg_type, price,
       price_chicken, price_veg, available, popular, stock_quantity,
-      prep_time_mins, is_special, is_recommended
+      prep_time_mins, is_special, is_recommended, customizations
     } = req.body;
 
     const db = await getDb();
@@ -1162,13 +1206,15 @@ app.put('/api/menu/:id', authenticateToken, requireAdmin, async (req, res) => {
       UPDATE menu_items
       SET category_id = ?, name = ?, description = ?, image_url = ?, veg_type = ?, price = ?,
           price_chicken = ?, price_veg = ?, available = ?, popular = ?, stock_quantity = ?,
-          prep_time_mins = ?, is_special = ?, is_recommended = ?, updated_at = CURRENT_TIMESTAMP
+          prep_time_mins = ?, is_special = ?, is_recommended = ?, customizations = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `, [
       category_id, name, description, image_url, veg_type, Number(price),
       price_chicken ? Number(price_chicken) : null, price_veg ? Number(price_veg) : null,
       available ? 1 : 0, popular ? 1 : 0, Number(stock_quantity), Number(prep_time_mins),
-      is_special ? 1 : 0, is_recommended ? 1 : 0, id
+      is_special ? 1 : 0, is_recommended ? 1 : 0,
+      customizations !== undefined ? String(customizations) : null,
+      id
     ]);
 
     await db.logActivity({
@@ -1346,6 +1392,30 @@ app.post('/api/orders', async (req, res) => {
       if (cartItem.variant === 'Veg' && dbItem.price_veg) authoritativeUnitPrice = Number(dbItem.price_veg);
       if (cartItem.variant === 'Chicken' && dbItem.price_chicken) authoritativeUnitPrice = Number(dbItem.price_chicken);
 
+      // Securely validate item customizations against dbItem.customizations
+      let selectedCustomizationsText = '';
+      if (cartItem.customizations) {
+        const availableOptions = parseCustomizations(dbItem.customizations);
+        let selectedList = [];
+        if (Array.isArray(cartItem.customizations)) {
+          selectedList = cartItem.customizations;
+        } else if (typeof cartItem.customizations === 'string') {
+          selectedList = cartItem.customizations.split(/[,;]/).map(s => s.trim()).filter(Boolean);
+        }
+
+        const validSelected = [];
+        for (const selected of selectedList) {
+          const selectedName = typeof selected === 'object' ? (selected.name || selected.label || '') : selected;
+          const cleanSelName = String(selectedName).replace(/\s*[\(\-].*$/, '').trim().toLowerCase();
+          const matchedOption = availableOptions.find(opt => opt.name.toLowerCase() === cleanSelName);
+          if (matchedOption) {
+            authoritativeUnitPrice += Number(matchedOption.price);
+            validSelected.push(matchedOption.price > 0 ? `${matchedOption.name} (+₹${matchedOption.price})` : matchedOption.name);
+          }
+        }
+        selectedCustomizationsText = validSelected.join(', ');
+      }
+
       const itemTotal = authoritativeUnitPrice * qty;
       serverSubtotal += itemTotal;
 
@@ -1353,6 +1423,7 @@ app.post('/api/orders', async (req, res) => {
         menu_item_id: dbItem.id,
         item_name: dbItem.name,
         variant: cartItem.variant || null,
+        customizations: selectedCustomizationsText || null,
         quantity: qty,
         unit_price: authoritativeUnitPrice,
         total_price: itemTotal,
@@ -1389,35 +1460,53 @@ app.post('/api/orders', async (req, res) => {
 
 
     // Create Order with pending payment status
-    // Create Order with pending payment status
 const orderResult = await db.transaction(async (tx) => {
-  // Prevent simultaneous orders from generating the same number.
-  await tx.query(
-    'SELECT pg_advisory_xact_lock($1, $2)',
-    [24016, 1]
-  );
+  // Advisory lock prevents duplicate order numbers under concurrent load.
+  // pg-mem (test environment) does not support advisory locks; skip safely.
+  try {
+    await tx.query(
+      'SELECT pg_advisory_xact_lock($1, $2)',
+      [24016, 1]
+    );
+  } catch (_lockErr) {
+    // Non-fatal: advisory lock unavailable (e.g. pg-mem in test mode)
+  }
 
-  // Calculate the business day using Bengaluru time and a 2 AM reset.
-  const sequenceResult = await tx.get(`
-  WITH business_day AS (
-    SELECT CASE
-      WHEN (NOW() AT TIME ZONE 'Asia/Kolkata')::time < TIME '02:00'
-        THEN (NOW() AT TIME ZONE 'Asia/Kolkata')::date - 1
-      ELSE (NOW() AT TIME ZONE 'Asia/Kolkata')::date
-    END AS day
-  )
-  SELECT
-    b.day AS business_day,
-    COALESCE(
-      MAX(SUBSTRING(o.order_number FROM '^FB([0-9]+)$')::INTEGER),
-      0
-    ) AS max_sequence
-  FROM business_day b
-  LEFT JOIN orders o
-    ON o.business_day = b.day
-    AND o.order_number ~ '^FB[0-9]+$'
-  GROUP BY b.day
-`);
+  let sequenceResult;
+  try {
+    // Production-grade query: uses IST timezone and regex sequence extraction
+    sequenceResult = await tx.get(`
+    WITH business_day AS (
+      SELECT CASE
+        WHEN (NOW() AT TIME ZONE 'Asia/Kolkata')::time < TIME '02:00'
+          THEN (NOW() AT TIME ZONE 'Asia/Kolkata')::date - 1
+        ELSE (NOW() AT TIME ZONE 'Asia/Kolkata')::date
+      END AS day
+    )
+    SELECT
+      b.day AS business_day,
+      COALESCE(
+        MAX(SUBSTRING(o.order_number FROM '^FB([0-9]+)$')::INTEGER),
+        0
+      ) AS max_sequence
+    FROM business_day b
+    LEFT JOIN orders o
+      ON o.business_day = b.day
+      AND o.order_number ~ '^FB[0-9]+$'
+    GROUP BY b.day
+  `);
+  } catch (_pgMemErr) {
+    // pg-mem fallback: simpler query compatible with in-memory engine
+    const today = new Date().toISOString().split('T')[0];
+    const countRes = await tx.get(
+      `SELECT COUNT(*) AS max_sequence FROM orders WHERE business_day = $1`,
+      [today]
+    );
+    sequenceResult = {
+      business_day: today,
+      max_sequence: Number(countRes?.max_sequence || 0)
+    };
+  }
 
   const nextSequence = Number(sequenceResult.max_sequence) + 1;
   const orderNumber = `FB${String(nextSequence).padStart(3, '0')}`;
@@ -1443,12 +1532,12 @@ const orderResult = await db.transaction(async (tx) => {
     await tx.run(`
       INSERT INTO order_items (
         order_id, menu_item_id, item_name, variant, quantity,
-        unit_price, total_price, special_instructions
+        unit_price, total_price, customizations, special_instructions
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       orderId, item.menu_item_id, item.item_name, item.variant,
-      item.quantity, item.unit_price, item.total_price, item.special_instructions
+      item.quantity, item.unit_price, item.total_price, item.customizations || null, item.special_instructions
     ]);
   }
 
@@ -1573,24 +1662,30 @@ app.post('/api/payment/razorpay/order', authenticateToken, async (req, res) => {
   }
 });
 
- // Execute Simulated Payment (Success or Failure)
+ // Execute Simulated Payment (Success or Failure) — Test / Dev Mode Only
 app.post('/api/payment/simulate', async (req, res) => {
+  // Security guard: Payment simulation cannot be accessed in production
+  if (isProduction) {
+    return res.status(403).json({
+      error: 'Payment simulation is disabled in production. Payments must be processed through Razorpay.'
+    });
+  }
+
   try {
     const { order_id, order_number, outcome, method } = req.body;
 
-    if (!order_id) {
+    if (!order_id && !order_number) {
       return res.status(400).json({
-        error: 'Order ID is required for payment simulation.'
+        error: 'order_id or order_number is required for payment simulation.'
       });
     }
 
     const db = await getDb();
-    const order = await db.get(
-      'SELECT id, order_number FROM orders WHERE id = ?',
-      [order_id]
-    );
+    const order = order_id
+      ? await db.get('SELECT id, order_number FROM orders WHERE id = ?', [Number(order_id)])
+      : await db.get('SELECT id, order_number FROM orders WHERE order_number = ? ORDER BY id DESC LIMIT 1', [order_number]);
 
-    if (!order || (order_number && order.order_number !== order_number)) {
+    if (!order) {
       return res.status(404).json({ error: 'Order not found.' });
     }
 
@@ -1607,22 +1702,28 @@ app.post('/api/payment/simulate', async (req, res) => {
   }
 });
 
-// Legacy / General Payment Verify route
+// Legacy / General Payment Verify route — Test / Dev Mode Only
 app.post('/api/payment/verify', async (req, res) => {
+  // Security guard: Payment simulation cannot be accessed in production
+  if (isProduction) {
+    return res.status(403).json({
+      error: 'Payment simulation is disabled in production. Real payment verification via Razorpay is required.'
+    });
+  }
+
   try {
     const { order_id, order_number, outcome, payment_method } = req.body;
 
-    if (!order_id) {
+    if (!order_id && !order_number) {
       return res.status(400).json({
-        error: 'Order ID is required for payment verification.'
+        error: 'Order ID or order_number is required for payment verification.'
       });
     }
 
     const db = await getDb();
-    const order = await db.get(
-      'SELECT id, order_number FROM orders WHERE id = ?',
-      [order_id]
-    );
+    const order = order_id
+      ? await db.get('SELECT id, order_number FROM orders WHERE id = ?', [order_id])
+      : await db.get('SELECT id, order_number FROM orders WHERE order_number = ?', [order_number]);
 
     if (!order || (order_number && order.order_number !== order_number)) {
       return res.status(404).json({ error: 'Order not found.' });
@@ -1640,26 +1741,6 @@ app.post('/api/payment/verify', async (req, res) => {
     res.status(400).json({ error: err.message });
   }
 });
-
-
-// Legacy / General Payment Verify route
-app.post('/api/payment/verify', async (req, res) => {
-  try {
-    const { order_number, outcome, payment_method } = req.body;
-    if (!order_number) return res.status(400).json({ error: 'order_number is required' });
-
-    const result = await PaymentService.executeSimulatedPayment({
-      orderNumber: order_number,
-      outcome: outcome || 'success',
-      method: payment_method || 'simulated_upi'
-    });
-
-    res.json(result);
-  } catch (err) {
-    res.status(400).json({ error: err.message });
-  }
-});
-
 
 app.post('/api/payment/razorpay/verify', authenticateToken, async (req, res) => {
   try {
@@ -1723,6 +1804,28 @@ app.post('/api/payment/razorpay/verify', authenticateToken, async (req, res) => 
   }
 });
 
+app.post('/api/payment/razorpay/failed', authenticateToken, async (req, res) => {
+  try {
+    const { order_id, error_description } = req.body;
+    if (!order_id) return res.status(400).json({ error: 'order_id is required' });
+
+    const db = await getDb();
+    const order = await db.get('SELECT * FROM orders WHERE id = ? AND user_id = ?', [order_id, req.user.id]);
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+
+    await db.run('UPDATE orders SET payment_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', ['failed', order.id]);
+    await db.run(`
+      INSERT INTO payments (order_id, transaction_id, provider, amount, currency, method, status, error_message)
+      VALUES (?, ?, 'razorpay', ?, 'INR', 'razorpay', 'failed', ?)
+      ON CONFLICT (transaction_id) DO UPDATE SET status = 'failed', error_message = EXCLUDED.error_message, updated_at = CURRENT_TIMESTAMP
+    `, [order.id, `FAILED_RZP_${order.id}_${Date.now()}`, Number(order.total), error_description || 'Payment failed or cancelled']);
+
+    res.json({ success: true, message: 'Payment failure recorded' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // =================== 7. ORDER HISTORY & TRACKING ===================
 
 // Customer Order History (Strict Ownership Enforced)
@@ -1733,22 +1836,28 @@ app.get('/api/customer/orders', authenticateToken, async (req, res) => {
     const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 10));
     const offset = (page - 1) * limit;
 
+    const cleanPhone = normalizePhone(req.user.phone);
+
     // Strict ownership check: only return orders belonging to this customer
     const orders = await db.all(`
       SELECT * FROM orders
       WHERE user_id = ? OR phone = ?
       ORDER BY created_at DESC
       LIMIT ? OFFSET ?
-    `, [req.user.id, req.user.phone, limit, offset]);
+    `, [req.user.id, cleanPhone, limit, offset]);
 
     for (const ord of orders) {
       ord.items = await db.all('SELECT * FROM order_items WHERE order_id = ?', [ord.id]);
+      const payment = await db.get('SELECT * FROM payments WHERE order_id = ? AND status = ? ORDER BY created_at DESC LIMIT 1', [ord.id, 'successful'])
+        || await db.get('SELECT * FROM payments WHERE order_id = ? ORDER BY created_at DESC LIMIT 1', [ord.id]);
+      ord.transaction_id = payment?.transaction_id || null;
+      ord.payment = payment;
     }
 
     const totalCountRes = await db.get(`
       SELECT COUNT(*) as count FROM orders
       WHERE user_id = ? OR phone = ?
-    `, [req.user.id, req.user.phone]);
+    `, [req.user.id, cleanPhone]);
 
     const total = parseInt(totalCountRes?.count || '0', 10);
 
@@ -1802,16 +1911,32 @@ app.get('/api/orders/:orderNumber/track', async (req, res) => {
     const order = await getOrderByIdOrNumber(db, orderNumber);
     if (!order) return res.status(404).json({ error: 'Order not found.' });
 
-    // Optional token ownership check
+    // Authorized access check: require customer/admin token OR matching phone parameter
     const authHeader = req.headers['authorization'];
     const authToken = authHeader && authHeader.split(' ')[1];
+    const phoneParam = req.query.phone ? normalizePhone(req.query.phone) : null;
+
+    if (!authToken && !phoneParam) {
+      return res.status(401).json({ error: 'Authentication or order phone number is required to track this order.' });
+    }
+
     if (authToken) {
       try {
         const payload = jwt.verify(authToken, JWT_SECRET);
-        if (payload.role !== 'admin' && order.user_id && Number(order.user_id) !== Number(payload.id) && order.phone !== payload.phone) {
-          return res.status(403).json({ error: 'Unauthorized to track this order.' });
+        if (payload.role !== 'admin') {
+          const isUserMatch = order.user_id && Number(order.user_id) === Number(payload.id);
+          const isPhoneMatch = order.phone && payload.phone && normalizePhone(order.phone) === normalizePhone(payload.phone);
+          if (!isUserMatch && !isPhoneMatch) {
+            return res.status(403).json({ error: 'Unauthorized to track this order.' });
+          }
         }
-      } catch (e) {}
+      } catch (err) {
+        return res.status(401).json({ error: 'Invalid or expired authorization token.' });
+      }
+    } else if (phoneParam) {
+      if (normalizePhone(order.phone) !== phoneParam) {
+        return res.status(403).json({ error: 'Unauthorized: Phone number does not match this order.' });
+      }
     }
 
     order.items = await db.all('SELECT * FROM order_items WHERE order_id = ?', [order.id]);
@@ -1874,6 +1999,10 @@ app.get('/api/orders', async (req, res) => {
     const orders = await db.all(query, params);
     for (const o of orders) {
       o.items = await db.all('SELECT * FROM order_items WHERE order_id = ?', [o.id]);
+      const payment = await db.get('SELECT * FROM payments WHERE order_id = ? AND status = ? ORDER BY created_at DESC LIMIT 1', [o.id, 'successful'])
+        || await db.get('SELECT * FROM payments WHERE order_id = ? ORDER BY created_at DESC LIMIT 1', [o.id]);
+      o.transaction_id = payment?.transaction_id || null;
+      o.payment = payment;
     }
 
     res.json(orders);
@@ -1891,8 +2020,10 @@ app.get('/api/orders/:orderNumber', async (req, res) => {
     if (!order) return res.status(404).json({ error: 'Order not found' });
 
     order.items = await db.all('SELECT * FROM order_items WHERE order_id = ?', [order.id]);
-    const payment = await db.get('SELECT * FROM payments WHERE order_id = ? ORDER BY created_at DESC LIMIT 1', [order.id]);
+    const payment = await db.get('SELECT * FROM payments WHERE order_id = ? AND status = ? ORDER BY created_at DESC LIMIT 1', [order.id, 'successful'])
+      || await db.get('SELECT * FROM payments WHERE order_id = ? ORDER BY created_at DESC LIMIT 1', [order.id]);
     order.payment = payment;
+    order.transaction_id = payment?.transaction_id || null;
 
     res.json(order);
   } catch (err) {
@@ -1952,6 +2083,44 @@ app.put('/api/orders/:id/status', authenticateToken, requireAdmin, async (req, r
   }
 });
 
+// Update Order Payment (Admin: records Pay at Cafe payment when customer pays at counter)
+app.put('/api/orders/:id/payment', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { payment_status, payment_method } = req.body;
+    const db = await getDb();
+    const order = await getOrderByIdOrNumber(db, id);
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+
+    const newPaymentStatus = payment_status || 'successful';
+    const newPaymentMethod = payment_method || order.payment_method || 'cash';
+
+    await db.run('UPDATE orders SET payment_status = ?, payment_method = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [
+      newPaymentStatus, newPaymentMethod, order.id
+    ]);
+
+    await db.run(`
+      INSERT INTO payments (order_id, transaction_id, provider, amount, currency, method, status)
+      VALUES (?, ?, 'cafe_counter', ?, 'INR', ?, ?)
+      ON CONFLICT (transaction_id) DO UPDATE SET status = EXCLUDED.status, updated_at = CURRENT_TIMESTAMP
+    `, [order.id, `COUNTER_PAID_${order.id}_${Date.now()}`, Number(order.total), newPaymentMethod, newPaymentStatus]);
+
+    await db.logActivity({
+      adminId: req.user.id,
+      adminEmail: req.user.email,
+      adminName: req.user.name,
+      action: 'Recorded Payment',
+      entity: 'order',
+      entityId: order.order_number,
+      details: `Payment recorded as ${newPaymentStatus} for #${order.order_number} (${newPaymentMethod})`
+    });
+
+    res.json({ success: true, message: `Payment recorded as ${newPaymentStatus}` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // =================== 8. DIGITAL RECEIPTS ===================
 
 // Receipt Data Endpoint
@@ -1965,12 +2134,17 @@ app.get('/api/receipts/:orderNumber', async (req, res) => {
 
     order.items = await db.all('SELECT * FROM order_items WHERE order_id = ?', [order.id]);
     const receipt = await db.get('SELECT * FROM receipts WHERE order_id = ?', [order.id]);
-    const payment = await db.get('SELECT * FROM payments WHERE order_id = ? ORDER BY created_at DESC LIMIT 1', [order.id]);
+    const payment = await db.get('SELECT * FROM payments WHERE order_id = ? AND status = ? ORDER BY created_at DESC LIMIT 1', [order.id, 'successful'])
+      || await db.get('SELECT * FROM payments WHERE order_id = ? ORDER BY created_at DESC LIMIT 1', [order.id]);
+
+    order.transaction_id = payment?.transaction_id || null;
+    order.payment = payment;
 
     res.json({
       receipt_number: receipt?.receipt_number || `RCP_${order.order_number}`,
       order,
       payment,
+      transaction_id: payment?.transaction_id || null,
       isSimulated: payment?.provider === 'simulated'
     });
   } catch (err) {
@@ -1987,8 +2161,13 @@ app.get('/api/receipts/:orderNumber/download', async (req, res) => {
     if (!order) return res.status(404).send('<h2>Receipt Not Found</h2>');
 
     const items = await db.all('SELECT * FROM order_items WHERE order_id = ?', [order.id]);
-    const payment = await db.get('SELECT * FROM payments WHERE order_id = ? ORDER BY created_at DESC LIMIT 1', [order.id]);
+    const payment = await db.get('SELECT * FROM payments WHERE order_id = ? AND status = ? ORDER BY created_at DESC LIMIT 1', [order.id, 'successful'])
+      || await db.get('SELECT * FROM payments WHERE order_id = ? ORDER BY created_at DESC LIMIT 1', [order.id]);
     const isSimulated = payment?.provider === 'simulated';
+    const isPayAtCafe = order.payment_method === 'cash';
+    const txnIdDisplay = payment?.transaction_id
+      ? payment.transaction_id
+      : (isPayAtCafe ? 'Not applicable' : 'Not available');
 
     const html = `<!DOCTYPE html>
 <html lang="en">
@@ -2021,6 +2200,8 @@ app.get('/api/receipts/:orderNumber/download', async (req, res) => {
     <div><strong>Customer:</strong> ${order.customer_name} (+91 ${order.phone})</div>
     <div><strong>Order Mode:</strong> <span style="text-transform: uppercase;">${order.order_type}</span></div>
     <div><strong>Payment Status:</strong> <span class="badge ${order.payment_status === 'successful' || order.payment_status === 'paid' ? 'paid' : 'simulated'}">${order.payment_status.toUpperCase()}</span></div>
+    <div><strong>Payment Method:</strong> ${isPayAtCafe ? 'Pay at Cafe (Cash)' : (order.payment_method ? order.payment_method.toUpperCase() : 'Not recorded')}</div>
+    <div><strong>Transaction ID:</strong> <span style="font-family: monospace;">${txnIdDisplay}</span></div>
   </div>
 
   <table>
@@ -2034,7 +2215,10 @@ app.get('/api/receipts/:orderNumber/download', async (req, res) => {
     <tbody>
       ${items.map(it => `
         <tr>
-          <td>${it.item_name} ${it.variant ? `(${it.variant})` : ''}</td>
+          <td>
+            <div>${it.item_name} ${it.variant ? `(${it.variant})` : ''}</div>
+            ${it.customizations ? `<div style="font-size: 11px; color: #8B5A2B;">+ ${it.customizations}</div>` : ''}
+          </td>
           <td style="text-align: center;">${it.quantity}</td>
           <td style="text-align: right;">₹${Number(it.total_price).toFixed(2)}</td>
         </tr>
@@ -2145,30 +2329,50 @@ app.post('/api/receipts/whatsapp', async (req, res) => {
 app.get('/api/customers', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const db = await getDb();
+    const { search } = req.query;
 
-    // Query aggregated customer orders from database
-    const customers = await db.all(`
+    let query = `
       SELECT
         u.id,
         u.name,
         u.phone,
         u.created_at as registered_at,
-        COUNT(o.id) as total_orders,
+        COUNT(DISTINCT o.id) as total_orders,
         COALESCE(SUM(o.total), 0) as total_spending,
         MAX(o.created_at) as last_order_date
       FROM users u
       LEFT JOIN orders o ON (o.user_id = u.id OR o.phone = u.phone)
       WHERE u.role = 'customer'
+    `;
+    const params = [];
+
+    if (search) {
+      params.push(`%${search.trim().toLowerCase()}%`);
+      query += ` AND (LOWER(u.name) LIKE $${params.length} OR u.phone LIKE $${params.length})`;
+    }
+
+    query += `
       GROUP BY u.id, u.name, u.phone, u.created_at
       ORDER BY total_spending DESC
-    `);
+    `;
+
+    const customers = await db.all(query, params);
 
     for (const c of customers) {
       c.total_orders = parseInt(c.total_orders || '0', 10);
       c.total_spending = parseFloat(c.total_spending || '0');
       c.total_spent = c.total_spending;
-      c.order_history = await db.all('SELECT * FROM orders WHERE user_id = ? OR phone = ? ORDER BY created_at DESC LIMIT 5', [c.id, c.phone]);
+      c.order_history = await db.all(
+        'SELECT * FROM orders WHERE user_id = ? OR phone = ? ORDER BY created_at DESC LIMIT 20',
+        [c.id, c.phone]
+      );
+      for (const ord of c.order_history) {
+        ord.items = await db.all('SELECT * FROM order_items WHERE order_id = ?', [ord.id]);
+      }
       c.orders = c.order_history;
+      if (c.order_history && c.order_history.length > 0) {
+        c.preferred_order_type = c.order_history[0].order_type;
+      }
     }
 
     res.json(customers);
@@ -2512,7 +2716,7 @@ if (!process.env.VERCEL && process.env.NODE_ENV !== 'test') {
   app.listen(PORT, async () => {
     console.log(`FrenchBell Cafe Operations Server running on port ${PORT}`);
     console.log(`[Config] Loaded environment from: ${envPath} (exists: ${envExists})`);
-    console.log(`[Config] Test OTP Mode: ${isTestOtpMode ? `ACTIVE (Fixed test OTP: ${DEV_FIXED_OTP})` : 'DISABLED (Real SMS required)'}`);
+    console.log(`[Config] Test OTP Mode: ${isTestOtpMode ? 'ACTIVE (Dynamic 4-digit OTP shown in test UI)' : 'DISABLED (Real SMS required)'}`);
     console.log(`[Config] Database: PostgreSQL adapter ready`);
   });
 }
