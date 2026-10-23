@@ -118,10 +118,10 @@ export default function EReceiptModal({ order, onClose }) {
             <span className="text-french-muted">Order Mode:</span>
             <span className="font-bold uppercase text-french-gold">{order.order_type}</span>
           </div>
-          {order.table_number && (
+          {order.order_type === 'dine-in' && (
             <div className="flex justify-between">
-              <span className="text-french-muted">Table No:</span>
-              <span className="font-bold text-french-dark">{order.table_number}</span>
+              <span className="text-french-muted">Guests:</span>
+              <span className="font-bold text-french-dark">{order.num_people || 2}</span>
             </div>
           )}
           {order.order_type === 'delivery' && order.delivery_address && (

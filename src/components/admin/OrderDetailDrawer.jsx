@@ -171,11 +171,11 @@ export default function OrderDetailDrawer({ order, onClose, onStatusUpdated }) {
               </a>
             </div>
 
-            {order.table_number && (
+            {order.order_type === 'dine-in' && (
               <div>
-                <span className="text-[10px] text-french-muted uppercase tracking-wider block font-bold">Dine-In Table</span>
+                <span className="text-[10px] text-french-muted uppercase tracking-wider block font-bold">Dine-In Guests</span>
                 <span className="font-bold text-sm text-french-dark mt-0.5 block">
-                  Table #{order.table_number} ({order.num_people || 2} Guests)
+                  {order.num_people || 2} Guest(s)
                 </span>
               </div>
             )}
@@ -232,23 +232,28 @@ export default function OrderDetailDrawer({ order, onClose, onStatusUpdated }) {
 
             <div className="divide-y divide-french-gold/15 bg-french-cream/40">
               {(order.items || []).map((it, idx) => (
-                <div key={idx} className="p-3 flex items-center justify-between">
-                  <div>
+                <div key={idx} className="p-3 flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
                     <span className="font-bold text-sm text-french-dark block">
                       {it.item_name} <span className="text-french-muted font-mono font-normal">× {it.quantity}</span>
                     </span>
                     {it.variant && (
-                      <span className="text-[10px] font-bold text-french-gold uppercase mr-2">
-                        {it.variant}
+                      <span className="text-[10px] font-bold text-french-gold uppercase mr-2 block">
+                        Variant: {it.variant}
                       </span>
                     )}
-                    {it.customizations && (
-                      <span className="text-[10px] text-french-muted block">
-                        + {it.customizations}
+                    {it.customizations && String(it.customizations).trim() && (
+                      <span className="text-[10px] text-french-muted block mt-0.5">
+                        <span className="font-semibold text-amber-700">Customizations:</span> {String(it.customizations).trim()}
+                      </span>
+                    )}
+                    {it.special_instructions && String(it.special_instructions).trim() && (
+                      <span className="text-[10px] text-amber-800 italic block mt-0.5">
+                        Note: {String(it.special_instructions).trim()}
                       </span>
                     )}
                   </div>
-                  <span className="font-serif font-extrabold text-sm text-french-dark">
+                  <span className="font-serif font-extrabold text-sm text-french-dark shrink-0">
                     ₹{it.total_price || (it.unit_price * it.quantity)}
                   </span>
                 </div>

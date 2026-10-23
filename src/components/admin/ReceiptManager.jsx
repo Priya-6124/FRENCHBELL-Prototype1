@@ -179,7 +179,6 @@ export default function ReceiptManager() {
       { header: 'Customer Name', key: 'customer_name', width: 160 },
       { header: 'Phone', key: 'phone', width: 130 },
       { header: 'Order Type', key: 'order_type', width: 110 },
-      { header: 'Table #', key: 'table_number', width: 90 },
       { header: 'Items Purchased', key: 'items_summary', width: 220 },
       { header: 'Subtotal (₹)', key: 'subtotal', width: 110, isCurrency: true },
       { header: 'Discount (₹)', key: 'discount', width: 110, isCurrency: true },
@@ -197,7 +196,6 @@ export default function ReceiptManager() {
         customer_name: o.customer_name,
         phone: o.phone,
         order_type: (o.order_type || 'takeaway').toUpperCase(),
-        table_number: o.table_number || 'N/A',
         items_summary: itemsSummary || 'Standard order items',
         subtotal: o.subtotal || o.total,
         discount: o.discount || 0,
@@ -396,7 +394,6 @@ export default function ReceiptManager() {
                       <td className="p-4">
                         <span className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-french-cream border border-french-gold/30 text-french-dark">
                           {order.order_type}
-                          {order.table_number && ` (T-${order.table_number})`}
                         </span>
                       </td>
 

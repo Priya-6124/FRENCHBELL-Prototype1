@@ -318,7 +318,7 @@ export default function LiveOrderBoard({ initialStatus = 'all', initialFilterTyp
                                 ? 'bg-amber-100 text-amber-900 border border-amber-200'
                                 : 'bg-blue-100 text-blue-900 border border-blue-200'
                             }`}>
-                              {order.order_type === 'dine-in' && <><Utensils className="w-3 h-3" /><span>T-{order.table_number || '01'}</span></>}
+                              {order.order_type === 'dine-in' && <><Utensils className="w-3 h-3" /><span>Dine-In</span></>}
                               {order.order_type === 'takeaway' && <><ShoppingBag className="w-3 h-3" /><span>Takeaway</span></>}
                               {order.order_type === 'delivery' && <><Bike className="w-3 h-3" /><span>Delivery</span></>}
                             </span>
@@ -454,7 +454,7 @@ export default function LiveOrderBoard({ initialStatus = 'all', initialFilterTyp
                               ? 'bg-amber-50 text-amber-800 border border-amber-200'
                               : 'bg-blue-50 text-blue-800 border border-blue-200'
                           }`}>
-                            {order.order_type === 'dine-in' && `Table #${order.table_number || '01'}`}
+                            {order.order_type === 'dine-in' && 'Dine-In'}
                             {order.order_type === 'takeaway' && 'Takeaway'}
                             {order.order_type === 'delivery' && 'Delivery'}
                           </span>

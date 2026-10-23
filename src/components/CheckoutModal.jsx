@@ -165,7 +165,7 @@ export default function CheckoutModal({ onClose, onOrderPlaced }) {
         const payload = {
           user_id: user.id || null,
           order_type: orderMode,
-          table_number: orderMode === 'dine-in' ? (dineInDetails.tableNumber || '04') : null,
+          table_number: null,
           num_people: orderMode === 'dine-in' ? (dineInDetails.numPeople || 2) : null,
           customer_name: customerName,
           phone: customerPhone,
@@ -421,7 +421,7 @@ export default function CheckoutModal({ onClose, onOrderPlaced }) {
                 {orderMode === 'dine-in' && (
                   <>
                     <UtensilsCrossed className="w-3.5 h-3.5" />
-                    <span>Dine-In Table #{dineInDetails.tableNumber || '04'}</span>
+                    <span>Dine-In</span>
                   </>
                 )}
                 {orderMode === 'takeaway' && (

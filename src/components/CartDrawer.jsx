@@ -135,7 +135,7 @@ export default function CartDrawer() {
   };
 
   const getOrderModeLabel = () => {
-    if (orderMode === 'dine-in') return 'Dine-In Table';
+    if (orderMode === 'dine-in') return 'Dine-In';
     if (orderMode === 'takeaway') return 'Takeaway Counter';
     return 'Doorstep Delivery';
   };

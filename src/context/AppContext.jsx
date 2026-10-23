@@ -24,7 +24,7 @@ export function AppProvider({ children }) {
   const [searchQuery, setSearchQuery] = useState('');
 
   // Order Details Forms
-  const [dineInDetails, setDineInDetails] = useState({ tableNumber: '04', numPeople: 2, customerName: '', instructions: '' });
+  const [dineInDetails, setDineInDetails] = useState({ numPeople: 2, customerName: '', instructions: '' });
   const [takeawayDetails, setTakeawayDetails] = useState({ customerName: '', phone: '', pickupTime: '20-30 mins', instructions: '' });
   const [deliveryDetails, setDeliveryDetails] = useState({ customerName: '', phone: '', address: '', landmark: '', pincode: '', instructions: '' });
 
@@ -109,8 +109,8 @@ export function AppProvider({ children }) {
     if (tableParam) {
       setLockedTableNumber(tableParam);
       setOrderMode('dine-in');
-      setDineInDetails(prev => ({ ...prev, tableNumber: tableParam }));
-      addNotification(`Dine-In Table #${tableParam}`, 'Welcome to FrenchBell Cafe! You are ordering for Table #' + tableParam, 'success');
+      setDineInDetails(prev => ({ ...prev }));
+      addNotification('Dine-In', 'Welcome to FrenchBell Cafe! You are ordering for Dine-In.', 'success');
     } else if (modeParam && ['dine-in', 'takeaway', 'delivery'].includes(modeParam)) {
       setOrderMode(modeParam);
     }
