@@ -58,6 +58,7 @@ export default function CheckoutModal({ onClose, onOrderPlaced }) {
     dineInDetails,
     takeawayDetails,
     deliveryDetails,
+    setDeliveryDetails,
     clearCart,
     addNotification
   } = useApp();
@@ -138,6 +139,18 @@ export default function CheckoutModal({ onClose, onOrderPlaced }) {
       return;
     }
 
+    // Validate delivery details when orderMode is delivery
+    if (orderMode === 'delivery') {
+      if (!deliveryDetails.address || !deliveryDetails.address.trim()) {
+        setPaymentError('Please enter your full delivery address (house/flat no., building, street) before placing your order.');
+        return;
+      }
+      if (!deliveryDetails.pincode || !deliveryDetails.pincode.trim()) {
+        setPaymentError('Please enter your 6-digit delivery area pincode.');
+        return;
+      }
+    }
+
     setIsProcessingPayment(true);
     setPaymentError('');
 
@@ -157,9 +170,9 @@ export default function CheckoutModal({ onClose, onOrderPlaced }) {
           customer_name: customerName,
           phone: customerPhone,
           pickup_time: orderMode === 'takeaway' ? (takeawayDetails.pickupTime || '20 mins') : null,
-          delivery_address: orderMode === 'delivery' ? (deliveryDetails.address || 'K. Narayanpura') : null,
-          landmark: orderMode === 'delivery' ? deliveryDetails.landmark : null,
-          pincode: orderMode === 'delivery' ? deliveryDetails.pincode : null,
+          delivery_address: orderMode === 'delivery' ? deliveryDetails.address.trim() : null,
+          landmark: orderMode === 'delivery' ? (deliveryDetails.landmark?.trim() || null) : null,
+          pincode: orderMode === 'delivery' ? (deliveryDetails.pincode?.trim() || null) : null,
           delivery_distance_km: 1.5,
           subtotal: cartSubtotal,
           discount: discountAmount,
@@ -175,7 +188,7 @@ export default function CheckoutModal({ onClose, onOrderPlaced }) {
             menu_item_id: i.id,
             item_name: i.name,
             variant: i.variant || null,
-            customizations: i.customizations || i.selectedCustomizations || null,
+            customizations: i.customizations || (Array.isArray(i.selectedCustomizations) ? i.selectedCustomizations.join(', ') : null),
             quantity: i.quantity,
             unit_price: i.price,
             total_price: i.price * i.quantity,
@@ -589,6 +602,11 @@ export default function CheckoutModal({ onClose, onOrderPlaced }) {
                       <div className="truncate pr-2">
                         <span>{item.quantity}x {item.name}</span>
                         {item.variant && <span className="text-french-muted"> • {item.variant}</span>}
+                        {item.customizations && (
+                          <div className="text-[10px] text-french-gold font-semibold truncate">
+                            + {item.customizations}
+                          </div>
+                        )}
                         {item.special_instructions && (
                           <div className="text-[10px] text-french-muted italic">
                             Note: {item.special_instructions}
@@ -627,6 +645,79 @@ export default function CheckoutModal({ onClose, onOrderPlaced }) {
                   </div>
                 </div>
               </div>
+
+              {/* Delivery Address Form (Required when Order Mode is Delivery) */}
+              {orderMode === 'delivery' && (
+                <div className="p-4 rounded-2xl bg-french-cream/80 border border-french-gold/30 space-y-3">
+                  <div className="flex items-center gap-2 border-b border-french-gold/20 pb-2">
+                    <Bike className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span className="font-serif font-bold text-sm text-french-dark">Doorstep Delivery Details *</span>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-[11px] font-bold uppercase tracking-wider text-french-dark mb-1">
+                        Full Delivery Address * <span className="text-french-muted font-normal">(House/Flat, Building, Street)</span>
+                      </label>
+                      <textarea
+                        rows={2}
+                        required
+                        value={deliveryDetails.address || ''}
+                        onChange={(e) => setDeliveryDetails(prev => ({ ...prev, address: e.target.value }))}
+                        placeholder="e.g. Flat 302, Green Glen Apartments, K. Narayanpura Main Road"
+                        className="w-full px-3 py-2 rounded-xl border border-french-gold/30 bg-french-card text-xs focus:outline-none focus:border-french-gold"
+                      />
+                      {!deliveryDetails.address?.trim() && (
+                        <span className="text-[10px] text-amber-700 font-semibold block mt-0.5">
+                          * Please enter your delivery address before checkout.
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-bold uppercase tracking-wider text-french-dark mb-1">
+                          Nearby Landmark
+                        </label>
+                        <input
+                          type="text"
+                          value={deliveryDetails.landmark || ''}
+                          onChange={(e) => setDeliveryDetails(prev => ({ ...prev, landmark: e.target.value }))}
+                          placeholder="e.g. Near SBI ATM"
+                          className="w-full px-3 py-2 rounded-xl border border-french-gold/30 bg-french-card text-xs focus:outline-none focus:border-french-gold"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold uppercase tracking-wider text-french-dark mb-1">
+                          Pincode *
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          maxLength={6}
+                          value={deliveryDetails.pincode || ''}
+                          onChange={(e) => setDeliveryDetails(prev => ({ ...prev, pincode: e.target.value.replace(/\D/g, '') }))}
+                          placeholder="560077"
+                          className="w-full px-3 py-2 rounded-xl border border-french-gold/30 bg-french-card text-xs font-mono font-bold focus:outline-none focus:border-french-gold"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold uppercase tracking-wider text-french-dark mb-1">
+                        Delivery Drop Instructions <span className="text-french-muted font-normal">(Optional)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={deliveryDetails.instructions || ''}
+                        onChange={(e) => setDeliveryDetails(prev => ({ ...prev, instructions: e.target.value }))}
+                        placeholder="e.g. Leave with security guard, please do not ring doorbell"
+                        className="w-full px-3 py-2 rounded-xl border border-french-gold/30 bg-french-card text-xs focus:outline-none focus:border-french-gold"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Payment Failure Error Banner */}
               {paymentError && (

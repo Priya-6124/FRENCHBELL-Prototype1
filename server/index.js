@@ -36,13 +36,20 @@ function getRazorpayClient() {
 // Production safety check: Reject test OTP mode in production
 
  // Production safety check: distinguish Vercel Production from Preview
-const isProduction = process.env.VERCEL === '1'
-  ? process.env.VERCEL_ENV === 'production'
-  : process.env.NODE_ENV === 'production';
+export function getIsProduction() {
+  return process.env.VERCEL === '1'
+    ? process.env.VERCEL_ENV === 'production'
+    : process.env.NODE_ENV === 'production';
+}
 
-const isTestOtpMode =
-  process.env.TEST_OTP_MODE === 'true' ||
-  (!isProduction && process.env.TEST_OTP_MODE !== 'false');
+export function getIsTestOtpMode() {
+  // Never permit test OTP exposure in a production environment
+  if (getIsProduction()) return false;
+  return process.env.TEST_OTP_MODE === 'true' || process.env.TEST_OTP_MODE !== 'false';
+}
+
+const isProduction = getIsProduction();
+const isTestOtpMode = getIsTestOtpMode();
 
 if (isProduction && process.env.TEST_OTP_MODE === 'true') {
   console.error(
@@ -85,7 +92,7 @@ app.get('/api/health', async (req, res) => {
     res.json({
       status: 'ok',
       database: 'connected',
-      testOtpMode: isTestOtpMode,
+      testOtpMode: getIsTestOtpMode(),
       serverless: !!process.env.VERCEL
     });
   } catch (err) {
@@ -161,6 +168,54 @@ const requireAdmin = (req, res, next) => {
   }
   next();
 };
+
+/**
+ * Verify Tester Authorization for Production OTP Testing
+ * Allows authorized admins (via Bearer token) or explicit tester secret (via X-Tester-Secret / X-Tester-Token)
+ * to receive backend-generated test OTPs in Production without exposing OTP to arbitrary visitors.
+ */
+export async function verifyTesterAuthorization(req, db) {
+  // Can be explicitly disabled via environment variable
+  if (process.env.PROD_TESTER_ENABLED === 'false') {
+    return { authorized: false, reason: 'Tester access is disabled by configuration.' };
+  }
+
+  // Check 1: X-Tester-Secret or X-Tester-Token header against configured PROD_TESTER_SECRET
+  const testerSecretHeader = req.headers['x-tester-secret'] || req.headers['x-tester-token'];
+  const configuredSecret = process.env.PROD_TESTER_SECRET;
+  if (configuredSecret && testerSecretHeader && typeof testerSecretHeader === 'string') {
+    const hBuf = Buffer.from(testerSecretHeader.trim());
+    const sBuf = Buffer.from(configuredSecret.trim());
+    if (hBuf.length === sBuf.length && crypto.timingSafeEqual(hBuf, sBuf)) {
+      return { authorized: true, identifier: 'tester-secret', admin: null };
+    }
+  }
+
+  // Check 2: Bearer token carrying valid admin JWT or tester JWT
+  const authHeader = req.headers['authorization'] || (testerSecretHeader && testerSecretHeader.startsWith('Bearer ') ? testerSecretHeader : null);
+  const token = authHeader && (authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1] : authHeader);
+  if (token) {
+    try {
+      const payload = jwt.verify(token, JWT_SECRET);
+      if (payload && (payload.role === 'admin' || payload.role === 'tester')) {
+        let adminUser = null;
+        if (db && payload.id) {
+          adminUser = await db.get('SELECT id, email, name, role, status FROM users WHERE id = ?', [payload.id]);
+          if (adminUser && (adminUser.status === 'suspended' || adminUser.status === 'removed')) {
+            return { authorized: false, reason: 'Account suspended or removed' };
+          }
+        }
+        return {
+          authorized: true,
+          identifier: payload.email || `tester-${payload.id || payload.adminId || 'session'}`,
+          admin: adminUser || payload
+        };
+      }
+    } catch (e) {}
+  }
+
+  return { authorized: false };
+}
 
 // =================== 1. MOBILE OTP & CUSTOMER AUTH ROUTES ===================
 
@@ -259,8 +314,32 @@ app.post('/api/auth/send-otp', async (req, res) => {
       cooldownUntil: now + 60 * 1000
     });
 
-    // Development / Test OTP mode: return generated OTP for testing in UI
-    if (isTestOtpMode) {
+    // 1. Authorized Tester Workflow Check (Production or Non-Production)
+    // Allows authorized QA testers and admins to test mobile login without public exposure.
+    const testerAuth = await verifyTesterAuthorization(req, db);
+    if (testerAuth.authorized) {
+      await db.logActivity({
+        adminId: testerAuth.admin?.id || null,
+        adminEmail: testerAuth.admin?.email || 'tester@frenchbellcafe.com',
+        adminName: testerAuth.admin?.name || 'Authorized QA Tester',
+        action: 'Authorized Tester OTP Issued',
+        entity: 'otp',
+        entityId: cleanPhone.slice(-4),
+        details: `Authorized test OTP generated for mobile ending in ...${cleanPhone.slice(-4)}`
+      });
+
+      return res.json({
+        success: true,
+        phone: cleanPhone,
+        cooldownSeconds: 60,
+        testOtp: otp,
+        isTesterMode: true,
+        message: `AUTHORIZED TESTER: Verification code is ${otp}.`
+      });
+    }
+
+    // 2. Development / Local Test OTP mode: return generated OTP for local testing
+    if (getIsTestOtpMode()) {
       return res.json({
         success: true,
         phone: cleanPhone,
@@ -272,9 +351,28 @@ app.post('/api/auth/send-otp', async (req, res) => {
       });
     }
 
-    // Production mode: Real SMS provider requirement
+    // 3. Production mode: Real SMS provider requirement (Strictly protects against leaking OTP to arbitrary visitors)
+    if (smsService.isConfigured()) {
+      try {
+        await smsService.sendOtp({ phone: cleanPhone, otp });
+        return res.json({
+          success: true,
+          phone: cleanPhone,
+          cooldownSeconds: 60,
+          message: 'Verification code sent successfully to your mobile number.'
+        });
+      } catch (smsErr) {
+        // Clear stored OTP on delivery failure so customer is not blocked by cooldown
+        await db.deleteOtp(cleanPhone);
+        console.error('[SMS Service] Dispatch failed for phone ending in', cleanPhone.slice(-4), ':', smsErr.message);
+        return res.status(502).json({
+          error: 'Unable to deliver verification code via SMS. Please check your mobile number or try again later.'
+        });
+      }
+    }
+
     return res.status(503).json({
-      error: 'SMS service is not configured for production delivery. Enable TEST_OTP_MODE in development.'
+      error: 'SMS service is not configured for production delivery. Configure Fast2SMS, Twilio, or MSG91 credentials in server environment settings.'
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -561,6 +659,36 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
     const user = await db.get('SELECT id, name, phone, email, role, status, whatsapp_opt_in, created_at FROM users WHERE id = ?', [req.user.id]);
     if (!user) return res.status(404).json({ error: 'User not found' });
     res.json({ user });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Issue a short-lived QA tester session for authorized production OTP verification
+app.post('/api/admin/tester-session', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const db = await getDb();
+    const testerToken = jwt.sign(
+      { role: 'tester', adminId: req.user.id, email: req.user.email },
+      JWT_SECRET,
+      { expiresIn: '2h' }
+    );
+
+    await db.logActivity({
+      adminId: req.user.id,
+      adminEmail: req.user.email,
+      adminName: req.user.name,
+      action: 'Generated QA Tester Session',
+      entity: 'auth',
+      details: `Generated short-lived 2-hour tester token for ${req.user.email}`
+    });
+
+    res.json({
+      success: true,
+      testerToken,
+      expiresIn: '2 hours',
+      message: 'Authorized 2-hour QA tester session token created successfully.'
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1548,6 +1676,13 @@ const orderResult = await db.transaction(async (tx) => {
     VALUES (?, NULL, 'received', 'Customer Checkout', 'Order created pending payment')
   `, [orderId]);
 
+  await tx.addAdminNotification({
+    title: `New ${cleanOrderType.toUpperCase()} Order #${orderNumber}`,
+    message: `${customer_name} placed order #${orderNumber} (${cleanOrderType.toUpperCase()}) for ₹${serverGrandTotal}.`,
+    type: 'order',
+    linkTab: 'live-orders'
+  });
+
   const createdOrder = await tx.get(
     'SELECT * FROM orders WHERE id = ?',
     [orderId]
@@ -2077,6 +2212,13 @@ app.put('/api/orders/:id/status', authenticateToken, requireAdmin, async (req, r
       details: `Status of #${order.order_number} changed from "${currentStatus}" to "${order_status}"`
     });
 
+    await db.addAdminNotification({
+      title: `Order #${order.order_number} Status Updated`,
+      message: `Order #${order.order_number} changed from "${currentStatus}" to "${order_status}".`,
+      type: 'order',
+      linkTab: 'live-orders'
+    });
+
     res.json({ success: true, message: `Order #${order.order_number} updated to ${order_status}` });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -2104,6 +2246,13 @@ app.put('/api/orders/:id/payment', authenticateToken, requireAdmin, async (req, 
       VALUES (?, ?, 'cafe_counter', ?, 'INR', ?, ?)
       ON CONFLICT (transaction_id) DO UPDATE SET status = EXCLUDED.status, updated_at = CURRENT_TIMESTAMP
     `, [order.id, `COUNTER_PAID_${order.id}_${Date.now()}`, Number(order.total), newPaymentMethod, newPaymentStatus]);
+
+    await db.addAdminNotification({
+      title: `Payment Recorded for #${order.order_number}`,
+      message: `Payment recorded as ${newPaymentStatus} (${newPaymentMethod}) for Order #${order.order_number}.`,
+      type: 'order',
+      linkTab: 'live-orders'
+    });
 
     await db.logActivity({
       adminId: req.user.id,
@@ -2137,14 +2286,20 @@ app.get('/api/receipts/:orderNumber', async (req, res) => {
     const payment = await db.get('SELECT * FROM payments WHERE order_id = ? AND status = ? ORDER BY created_at DESC LIMIT 1', [order.id, 'successful'])
       || await db.get('SELECT * FROM payments WHERE order_id = ? ORDER BY created_at DESC LIMIT 1', [order.id]);
 
-    order.transaction_id = payment?.transaction_id || null;
+    const isPaid = order.payment_status === 'successful' || order.payment_status === 'paid';
+    let validTxnId = null;
+    if (isPaid && payment?.transaction_id && !payment.transaction_id.startsWith('rzp_order_')) {
+      validTxnId = payment.transaction_id;
+    }
+
+    order.transaction_id = validTxnId;
     order.payment = payment;
 
     res.json({
       receipt_number: receipt?.receipt_number || `RCP_${order.order_number}`,
       order,
       payment,
-      transaction_id: payment?.transaction_id || null,
+      transaction_id: validTxnId,
       isSimulated: payment?.provider === 'simulated'
     });
   } catch (err) {
@@ -2165,9 +2320,24 @@ app.get('/api/receipts/:orderNumber/download', async (req, res) => {
       || await db.get('SELECT * FROM payments WHERE order_id = ? ORDER BY created_at DESC LIMIT 1', [order.id]);
     const isSimulated = payment?.provider === 'simulated';
     const isPayAtCafe = order.payment_method === 'cash';
-    const txnIdDisplay = payment?.transaction_id
-      ? payment.transaction_id
-      : (isPayAtCafe ? 'Not applicable' : 'Not available');
+    const isPaid = order.payment_status === 'successful' || order.payment_status === 'paid';
+
+    let txnIdDisplay;
+    if (isPayAtCafe) {
+      if (isPaid && payment?.transaction_id && !payment.transaction_id.startsWith('rzp_order_')) {
+        txnIdDisplay = payment.transaction_id;
+      } else {
+        txnIdDisplay = isPaid ? 'Paid at Cafe (Cash)' : 'Not applicable (Unpaid - Pay at Cafe)';
+      }
+    } else {
+      if (isPaid && payment?.transaction_id && !payment.transaction_id.startsWith('rzp_order_')) {
+        txnIdDisplay = payment.transaction_id;
+      } else if (order.payment_status === 'failed') {
+        txnIdDisplay = 'Payment Failed';
+      } else {
+        txnIdDisplay = 'Payment Pending';
+      }
+    }
 
     const html = `<!DOCTYPE html>
 <html lang="en">
@@ -2199,7 +2369,9 @@ app.get('/api/receipts/:orderNumber/download', async (req, res) => {
     <div><strong>Date:</strong> ${new Date(order.created_at).toLocaleString()}</div>
     <div><strong>Customer:</strong> ${order.customer_name} (+91 ${order.phone})</div>
     <div><strong>Order Mode:</strong> <span style="text-transform: uppercase;">${order.order_type}</span></div>
-    <div><strong>Payment Status:</strong> <span class="badge ${order.payment_status === 'successful' || order.payment_status === 'paid' ? 'paid' : 'simulated'}">${order.payment_status.toUpperCase()}</span></div>
+    ${order.order_type === 'delivery' && order.delivery_address ? `<div><strong>Delivery Address:</strong> ${order.delivery_address}${order.landmark ? ` (Near ${order.landmark})` : ''}${order.pincode ? ` - ${order.pincode}` : ''}</div>` : ''}
+    ${order.order_type === 'dine-in' && order.table_number ? `<div><strong>Table Number:</strong> Table #${order.table_number}</div>` : ''}
+    <div><strong>Payment Status:</strong> <span class="badge ${isPaid ? 'paid' : 'simulated'}">${order.payment_status.toUpperCase()}</span></div>
     <div><strong>Payment Method:</strong> ${isPayAtCafe ? 'Pay at Cafe (Cash)' : (order.payment_method ? order.payment_method.toUpperCase() : 'Not recorded')}</div>
     <div><strong>Transaction ID:</strong> <span style="font-family: monospace;">${txnIdDisplay}</span></div>
   </div>
@@ -2655,13 +2827,33 @@ app.get('/api/admin/notifications', authenticateToken, requireAdmin, async (req,
   try {
     const db = await getDb();
     const notifications = await db.all('SELECT * FROM admin_notifications ORDER BY created_at DESC LIMIT 50');
-    res.json(notifications);
+    const unreadRow = await db.get('SELECT COUNT(*) as count FROM admin_notifications WHERE read = 0');
+    const unreadCount = parseInt(unreadRow?.count || '0', 10);
+
+    res.json({
+      notifications,
+      unreadCount,
+      unread_count: unreadCount
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-app.put('/api/admin/notifications/mark-read', authenticateToken, requireAdmin, async (req, res) => {
+// Mark single notification as read
+app.put('/api/admin/notifications/:id/read', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const db = await getDb();
+    await db.run('UPDATE admin_notifications SET read = 1 WHERE id = ?', [id]);
+    res.json({ success: true, message: 'Notification marked as read' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Mark all notifications as read
+const markAllAdminNotificationsRead = async (req, res) => {
   try {
     const db = await getDb();
     await db.run('UPDATE admin_notifications SET read = 1');
@@ -2669,7 +2861,10 @@ app.put('/api/admin/notifications/mark-read', authenticateToken, requireAdmin, a
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
-});
+};
+
+app.put('/api/admin/notifications/read-all', authenticateToken, requireAdmin, markAllAdminNotificationsRead);
+app.put('/api/admin/notifications/mark-read', authenticateToken, requireAdmin, markAllAdminNotificationsRead);
 
 // =================== 17. SETTINGS ===================
 

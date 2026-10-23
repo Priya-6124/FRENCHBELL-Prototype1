@@ -88,7 +88,7 @@ export default function FoodDetailsModal({ onClose }) {
   const getBasePrice = () => {
     if (selectedVariant === 'Veg' && selectedFood.price_veg) return Number(selectedFood.price_veg);
     if (selectedVariant === 'Chicken' && selectedFood.price_chicken) return Number(selectedFood.price_chicken);
-    return Number(selectedFood.price);
+    return Number(selectedFood.basePrice || selectedFood.price);
   };
 
   // Extra cost from selected customizations

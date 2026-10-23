@@ -34,6 +34,7 @@ class SmsService {
   }
 
   isConfigured() {
+    this.reloadConfig();
     if (this.provider === 'fast2sms' && this.fast2smsKey) return true;
     if (this.provider === 'twilio' && this.twilioSid && this.twilioAuth && this.twilioFrom) return true;
     if (this.provider === 'msg91' && this.msg91Key) return true;
@@ -49,6 +50,7 @@ class SmsService {
    * @param {{ phone: string, otp: string }} params
    */
   async sendOtp({ phone, otp }) {
+    this.reloadConfig();
     const cleanPhone = String(phone).replace(/\D/g, '').slice(-10);
     if (!cleanPhone || cleanPhone.length !== 10) {
       throw new Error('Please enter a valid 10-digit mobile number.');

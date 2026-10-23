@@ -15,17 +15,32 @@ export default function EReceiptModal({ order, onClose }) {
     order.payment_method === 'cash' ||
     String(order.payment_method || '').toLowerCase() === 'cash';
 
+  const isPaid =
+    order.payment_status === 'successful' || order.payment_status === 'paid';
+
   // Resolve transaction ID from multiple possible fields
   const resolvedTxnId =
     order.transaction_id ||
     order.payment?.transaction_id ||
+    order.payment_id ||
     null;
 
-  const txnIdDisplay = isPayAtCafe
-    ? 'Not applicable'
-    : (resolvedTxnId && !resolvedTxnId.startsWith('rzp_order_')
-      ? resolvedTxnId
-      : 'Not available');
+  let txnIdDisplay;
+  if (isPayAtCafe) {
+    if (isPaid && resolvedTxnId && !resolvedTxnId.startsWith('rzp_order_')) {
+      txnIdDisplay = resolvedTxnId;
+    } else {
+      txnIdDisplay = isPaid ? 'Paid at Cafe (Cash)' : 'Not applicable (Unpaid)';
+    }
+  } else {
+    if (isPaid && resolvedTxnId && !resolvedTxnId.startsWith('rzp_order_')) {
+      txnIdDisplay = resolvedTxnId;
+    } else if (order.payment_status === 'failed') {
+      txnIdDisplay = 'Payment Failed';
+    } else {
+      txnIdDisplay = 'Payment Pending';
+    }
+  }
 
   const handleDownloadPdf = () => {
     window.open(`/api/receipts/${order.order_number}/download`, '_blank');
@@ -107,6 +122,16 @@ export default function EReceiptModal({ order, onClose }) {
             <div className="flex justify-between">
               <span className="text-french-muted">Table No:</span>
               <span className="font-bold text-french-dark">{order.table_number}</span>
+            </div>
+          )}
+          {order.order_type === 'delivery' && order.delivery_address && (
+            <div className="flex justify-between items-start pt-1 border-t border-french-gold/15">
+              <span className="text-french-muted shrink-0">Delivery Address:</span>
+              <span className="font-medium text-french-dark text-right max-w-[200px] leading-tight text-[11px]">
+                {order.delivery_address}
+                {order.landmark ? ` (Near ${order.landmark})` : ''}
+                {order.pincode ? ` - ${order.pincode}` : ''}
+              </span>
             </div>
           )}
           <div className="flex justify-between items-center">

@@ -53,6 +53,8 @@ export function AuthProvider({ children }) {
       // TEST MODE: Store OTP returned from server so the UI can display it
       if (data.testOtp) {
         setLastGeneratedOtp(data.testOtp);
+      } else {
+        setLastGeneratedOtp(null);
       }
 
       setLoading(false);

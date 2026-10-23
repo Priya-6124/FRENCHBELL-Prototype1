@@ -35,6 +35,13 @@ Configure environment variables in `.env` (never commit secrets or real credenti
 | `ADMIN_EMAIL` | Yes | Initial primary administrator email for auto-provisioning |
 | `ADMIN_PASSWORD` | Yes | Initial primary administrator password |
 | `TEST_OTP_MODE` | Optional | Set to `true` in development/testing to display generated OTP in the UI banner. **Strictly rejected in production**. |
+| `SMS_PROVIDER` | Optional | Active SMS provider name (`fast2sms`, `twilio`, or `msg91`) |
+| `FAST2SMS_API_KEY` | Optional | Fast2SMS authorization key (if using Fast2SMS provider) |
+| `TWILIO_ACCOUNT_SID` | Optional | Twilio Account SID (if using Twilio provider) |
+| `TWILIO_AUTH_TOKEN` | Optional | Twilio Auth Token (if using Twilio provider) |
+| `TWILIO_PHONE_NUMBER` | Optional | Twilio outgoing sender phone number (e.g. `+1...`) |
+| `MSG91_AUTH_KEY` | Optional | MSG91 auth key (if using MSG91 provider) |
+| `MSG91_TEMPLATE_ID` | Optional | MSG91 DLT-approved template ID (if using MSG91 provider) |
 | `RAZORPAY_KEY_ID` | Yes (Online Pay) | Razorpay Key ID |
 | `RAZORPAY_KEY_SECRET` | Yes (Online Pay) | Razorpay Key Secret for backend HMAC signature validation |
 | `APP_URL` | Optional | Base URL of the web application for email invitation links |
@@ -48,16 +55,17 @@ Configure environment variables in `.env` (never commit secrets or real credenti
 
 ## 3. Customer OTP Verification Flow
 
-- **Secure Backend Generation:** The server generates a cryptographically secure 4-digit code using `crypto.randomInt(1000, 10000)` and stores only its SHA-256 hash.
-- **Testing Mode (`TEST_OTP_MODE=true`):** When enabled in non-production environments, the backend returns the generated OTP to the UI, which displays it in a visible banner inside the OTP verification modal. This allows full verification testing without requiring an active third-party SMS gateway.
-- **No Universal Hardcoded OTP:** Universal codes (e.g., `1234` or fixed development bypasses) are completely removed.
+- **Secure Backend Generation:** The server generates a cryptographically secure 4-digit code using `crypto.randomInt(1000, 10000)` and stores only its salted SHA-256 hash in the database.
+- **Production SMS Delivery (`smsService`):** In Production (`NODE_ENV=production` or `VERCEL_ENV=production`), OTPs are dispatched directly to the customer's mobile phone via the configured SMS provider (Fast2SMS, Twilio, or MSG91). Production API responses strictly omit raw OTPs, preventing any credential leakage.
+- **Testing Mode (`TEST_OTP_MODE=true`):** Allowed exclusively in development and automated testing environments (`isProduction=false`). The backend returns `testOtp` to the UI banner for local end-to-end verification without requiring an active third-party SMS provider.
+- **No Universal Hardcoded OTP:** Fixed bypasses or public universal OTPs are strictly eliminated.
 - **Security Controls:**
   - OTPs expire after 5 minutes.
   - Single-use: Deleted immediately upon successful verification.
   - Rate limiting: Maximum 5 requests per 15 minutes per phone number.
   - Resend cooldown: 60-second enforced timer.
-  - Maximum 3 incorrect attempts before invalidation.
-  - Production safeguard: The server refuses to boot if `TEST_OTP_MODE=true` is detected in production.
+  - Maximum 3 incorrect attempts before automatic invalidation.
+  - Production safeguard: The server refuses to boot if `TEST_OTP_MODE=true` is set in production, and `getIsTestOtpMode()` hard-locks test OTP exposure to `false` in production. If SMS is unconfigured in production, the API returns HTTP 503 instead of pretending an OTP was dispatched.
 
 ---
 
@@ -162,6 +170,8 @@ npm run server
    - `ADMIN_EMAIL` & `ADMIN_PASSWORD`: Primary admin credentials.
    - `RAZORPAY_KEY_ID` & `RAZORPAY_KEY_SECRET`: Production Razorpay keys.
    - `TEST_OTP_MODE`: Set to `false` (or omit) in Production.
+   - `SMS_PROVIDER`: Set to your SMS provider (`fast2sms`, `twilio`, or `msg91`).
+   - Provider API credentials (e.g. `FAST2SMS_API_KEY` for Fast2SMS; or `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER` for Twilio; or `MSG91_AUTH_KEY`, `MSG91_TEMPLATE_ID` for MSG91).
 3. The root `vercel.json` routes `/api/*` to the serverless entry point and serves frontend static assets for client-side routing.
 
 ---

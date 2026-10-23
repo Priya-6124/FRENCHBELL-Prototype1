@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
-import { X, CheckCircle, Clock, Bell, Download, AlertTriangle, RefreshCw, XCircle } from 'lucide-react';
+import { X, CheckCircle, Clock, Bell, Download, AlertTriangle, RefreshCw, XCircle, MapPin } from 'lucide-react';
 
 export default function OrderTracker({ order: propOrder, onClose }) {
   const { activeOrder } = useApp();
@@ -212,6 +212,21 @@ export default function OrderTracker({ order: propOrder, onClose }) {
             {liveOrder.payment_status || 'pending'}{isSimulated ? ' [SIMULATED]' : ''}
           </span>
         </div>
+
+        {/* Delivery Address Card for Delivery Orders */}
+        {(liveOrder.order_type === 'delivery' || order.order_type === 'delivery') && (liveOrder.delivery_address || order.delivery_address) && (
+          <div className="p-3 rounded-xl bg-french-cream/60 border border-french-gold/20 flex items-start gap-2.5 text-xs text-left">
+            <MapPin className="w-4 h-4 text-french-gold shrink-0 mt-0.5" />
+            <div>
+              <span className="font-bold text-[10px] text-french-muted uppercase block">Delivering To</span>
+              <p className="text-french-dark font-medium leading-tight">
+                {liveOrder.delivery_address || order.delivery_address}
+                {(liveOrder.landmark || order.landmark) ? ` (Near ${liveOrder.landmark || order.landmark})` : ''}
+                {(liveOrder.pincode || order.pincode) ? ` - ${liveOrder.pincode || order.pincode}` : ''}
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Vertical Tracker Steps */}
         {!isCancelled && (

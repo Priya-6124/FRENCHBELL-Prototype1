@@ -14,6 +14,7 @@ export default function LiveOrderBoard({ initialStatus = 'all', initialFilterTyp
 
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [fetchError, setFetchError] = useState(null);
   const [typeFilter, setTypeFilter] = useState(initialFilterType || 'all'); // 'all' | 'dine-in' | 'takeaway' | 'delivery'
   const [statusFilter, setStatusFilter] = useState(initialStatus || 'all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -44,15 +45,22 @@ export default function LiveOrderBoard({ initialStatus = 'all', initialFilterTyp
   // Fetch live orders
   const fetchOrders = async () => {
     try {
-      const res = await fetch('/api/orders');
+      const res = await fetch('/api/orders', {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      });
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data)) {
           setOrders(data);
+          setFetchError(null);
         }
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        setFetchError(errData.error || `Failed to load orders (HTTP ${res.status})`);
       }
     } catch (e) {
       console.error('Error fetching orders:', e);
+      setFetchError('Unable to connect to orders API.');
     }
   };
 
@@ -60,7 +68,7 @@ export default function LiveOrderBoard({ initialStatus = 'all', initialFilterTyp
     fetchOrders();
     const interval = setInterval(fetchOrders, 6000);
     return () => clearInterval(interval);
-  }, []);
+  }, [token]);
 
   const handleUpdateStatus = async (orderId, newStatus, e) => {
     if (e) e.stopPropagation();

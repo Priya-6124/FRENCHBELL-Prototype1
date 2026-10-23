@@ -290,6 +290,13 @@ if (!paymentUpdate.changes) {
         VALUES (?, ?, ?, 'unconfigured', 'none', 'Receipt messaging is not configured.')
         ON CONFLICT (receipt_number) DO NOTHING
       `, [order.id, receiptNumber, process.env.RECEIPT_DISPATCH_PHONE_NUMBER || null]);
+
+      await tx.addAdminNotification({
+        title: `Order #${order.order_number} Paid & Confirmed`,
+        message: `${order.customer_name} paid ₹${order.total} via Razorpay (Payment ID: ${razorpayPaymentId}).`,
+        type: 'order',
+        linkTab: 'live-orders'
+      });
     });
 
     return {

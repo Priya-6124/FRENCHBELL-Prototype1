@@ -199,14 +199,14 @@ export default function OrderDetailDrawer({ order, onClose, onStatusUpdated }) {
               </div>
 
               <p className="font-medium text-xs leading-relaxed text-french-dark/90 pl-5">
-                {order.delivery_address || 'K. Narayanpura, Main Rd'}
+                {order.delivery_address || 'Address not specified'}
                 {order.landmark ? ` (Near ${order.landmark})` : ''}
                 {order.pincode ? ` - ${order.pincode}` : ''}
               </p>
 
               <div className="flex items-center gap-4 text-[11px] text-french-muted pl-5 pt-1">
-                <span>Radius: <strong>~1.4 km</strong> (Within 2 km free zone)</span>
-                <span>Charge: <strong>₹0 (Free)</strong></span>
+                <span>Distance: <strong>{order.delivery_distance_km ? `${order.delivery_distance_km} km` : '~1.5 km'}</strong></span>
+                <span>Delivery Charge: <strong>₹{Number(order.delivery_charge || 0) === 0 ? '0 (Free)' : Number(order.delivery_charge || 0).toFixed(2)}</strong></span>
               </div>
             </div>
           )}
@@ -287,13 +287,25 @@ export default function OrderDetailDrawer({ order, onClose, onStatusUpdated }) {
           {(() => {
             const isPayAtCafe = order.payment_method === 'cash';
             const rawTxnId = order.transaction_id || order.payment?.transaction_id || order.payment_id;
-            const txnIdDisplay = isPayAtCafe
-              ? 'Not applicable'
-              : (rawTxnId && !rawTxnId.startsWith('rzp_order_')
-                ? rawTxnId
-                : 'Not available');
             const isPaid = order.payment_status === 'successful' || order.payment_status === 'paid';
             const isFailed = order.payment_status === 'failed';
+
+            let txnIdDisplay;
+            if (isPayAtCafe) {
+              if (isPaid && rawTxnId && !rawTxnId.startsWith('rzp_order_')) {
+                txnIdDisplay = rawTxnId;
+              } else {
+                txnIdDisplay = isPaid ? 'Paid at Cafe (Cash)' : 'Not applicable (Unpaid)';
+              }
+            } else {
+              if (isPaid && rawTxnId && !rawTxnId.startsWith('rzp_order_')) {
+                txnIdDisplay = rawTxnId;
+              } else if (isFailed) {
+                txnIdDisplay = 'Payment Failed';
+              } else {
+                txnIdDisplay = 'Payment Pending';
+              }
+            }
 
             return (
               <div className="p-3.5 rounded-2xl bg-french-cream/60 border border-french-gold/20 flex items-center justify-between text-xs">

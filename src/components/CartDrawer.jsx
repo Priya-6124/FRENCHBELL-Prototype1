@@ -15,7 +15,7 @@ export default function CartDrawer() {
     cartSubtotal, discountAmount, taxAmount, deliveryCharge, grandTotal, totalItemCount,
     orderMode, appliedOffer, setAppliedOffer, setUserManuallySelectedCoupon, isAutoCoupon,
     applyCouponByCode,
-    offers, setActiveModal, setSelectedFood
+    offers, setActiveModal, setSelectedFood, menuItems
   } = useApp();
   const { isAdmin, user } = useAuth();
 
@@ -95,9 +95,16 @@ export default function CartDrawer() {
 
   // Open item in FoodDetailsModal for customization edit
   const handleOpenCustomize = (item) => {
+    const originalMenuItem = (menuItems || []).find(m => m.id === item.id) || {};
     setSelectedFood({
+      ...originalMenuItem,
       ...item,
-      isCartEdit: true
+      isCartEdit: true,
+      price: item.basePrice || originalMenuItem.price || item.price,
+      customizations: originalMenuItem.customizations || item.availableCustomizations || item.customizations,
+      selectedCustomizations: item.selectedCustomizations || [],
+      variant: item.variant || null,
+      specialInstructions: item.specialInstructions || ''
     });
     setActiveModal('foodDetails');
   };

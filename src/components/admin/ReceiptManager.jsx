@@ -62,13 +62,40 @@ export default function ReceiptManager() {
     addNotification('Receipt Ready', `Tax invoice for #${order.order_number} opened for download / print.`, 'success');
   };
 
+  const getTxnIdDisplay = (order) => {
+    if (!order) return 'Not available';
+    const isPayAtCafe = order.payment_method === 'cash';
+    const rawTxnId = order.transaction_id || order.payment?.transaction_id || order.payment_id;
+    const isPaid = order.payment_status === 'successful' || order.payment_status === 'paid';
+    const isFailed = order.payment_status === 'failed';
+
+    if (isPayAtCafe) {
+      if (isPaid && rawTxnId && !rawTxnId.startsWith('rzp_order_')) {
+        return rawTxnId;
+      }
+      return isPaid ? 'Paid at Cafe (Cash)' : 'Not applicable (Unpaid)';
+    }
+    if (isPaid && rawTxnId && !rawTxnId.startsWith('rzp_order_')) {
+      return rawTxnId;
+    }
+    if (isFailed) return 'Payment Failed';
+    return 'Payment Pending';
+  };
+
   const triggerClientPrint = (order) => {
     const printWindow = window.open('', '_blank', 'width=600,height=750');
     if (!printWindow) return;
 
+    const isPaid = order.payment_status === 'successful' || order.payment_status === 'paid';
+    const isPayAtCafe = order.payment_method === 'cash';
+    const txnIdDisplay = getTxnIdDisplay(order);
+
     const itemsHtml = (order.items || []).map(it => `
       <tr>
-        <td style="padding: 8px 0; border-bottom: 1px solid #f0e6d6;">${it.item_name || it.name} ${it.variant ? `(${it.variant})` : ''}</td>
+        <td style="padding: 8px 0; border-bottom: 1px solid #f0e6d6;">
+          ${it.item_name || it.name} ${it.variant ? `(${it.variant})` : ''}
+          ${it.customizations ? `<br><small style="color:#8b5a2b;">+ ${it.customizations}</small>` : ''}
+        </td>
         <td style="text-align: right; padding: 8px 0; border-bottom: 1px solid #f0e6d6;">${it.quantity}</td>
         <td style="text-align: right; padding: 8px 0; border-bottom: 1px solid #f0e6d6;">₹${it.unit_price || it.price}</td>
         <td style="text-align: right; padding: 8px 0; border-bottom: 1px solid #f0e6d6;">₹${it.total_price || (it.price * it.quantity)}</td>
@@ -108,7 +135,9 @@ export default function ReceiptManager() {
             <div>Customer: <strong>${order.customer_name}</strong></div>
             <div>Phone: <strong>+91 ${order.phone}</strong></div>
             <div>Date: <strong>${new Date(order.created_at || Date.now()).toLocaleDateString()}</strong></div>
-            <div>Payment: <strong style="color:#10b981;">PAID (${(order.payment_method || 'UPI').toUpperCase()})</strong></div>
+            <div>Payment: <strong style="color:${isPaid ? '#10b981' : '#d97706'};">${(order.payment_status || 'PENDING').toUpperCase()} (${isPayAtCafe ? 'Pay at Cafe' : (order.payment_method || 'Online').toUpperCase()})</strong></div>
+            <div style="grid-column: span 2;">Transaction ID: <strong style="font-family: monospace;">${txnIdDisplay}</strong></div>
+            ${order.order_type === 'delivery' && order.delivery_address ? `<div style="grid-column: span 2;">Delivery Address: <strong>${order.delivery_address}${order.landmark ? ` (Near ${order.landmark})` : ''}${order.pincode ? ` - ${order.pincode}` : ''}</strong></div>` : ''}
           </div>
           <table>
             <thead><tr><th>Item</th><th style="text-align:right;">Qty</th><th style="text-align:right;">Price</th><th style="text-align:right;">Total</th></tr></thead>
@@ -387,8 +416,14 @@ export default function ReceiptManager() {
 
                       {/* Payment */}
                       <td className="p-4 text-center">
-                        <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-300">
-                          {order.payment_status || 'PAID'}
+                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                          order.payment_status === 'successful' || order.payment_status === 'paid'
+                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                            : order.payment_status === 'failed'
+                            ? 'bg-red-100 text-red-800 border border-red-300'
+                            : 'bg-amber-100 text-amber-800 border border-amber-300'
+                        }`}>
+                          {order.payment_status || 'PENDING'}
                         </span>
                       </td>
 
@@ -501,8 +536,30 @@ export default function ReceiptManager() {
               </div>
               <div>
                 <span className="text-[10px] text-french-muted block uppercase">Payment Status</span>
-                <span className="font-black text-emerald-700 uppercase">PAID ({(selectedReceipt.payment_method || 'UPI').toUpperCase()})</span>
+                <span className={`font-black uppercase ${
+                  selectedReceipt.payment_status === 'successful' || selectedReceipt.payment_status === 'paid'
+                    ? 'text-emerald-700'
+                    : selectedReceipt.payment_status === 'failed'
+                    ? 'text-red-700'
+                    : 'text-amber-700'
+                }`}>
+                  {(selectedReceipt.payment_status || 'PENDING').toUpperCase()} ({selectedReceipt.payment_method === 'cash' ? 'Pay at Cafe' : (selectedReceipt.payment_method || 'Online').toUpperCase()})
+                </span>
               </div>
+              <div className="col-span-2">
+                <span className="text-[10px] text-french-muted block uppercase">Transaction ID</span>
+                <span className="font-mono font-bold text-french-dark text-[11px]">{getTxnIdDisplay(selectedReceipt)}</span>
+              </div>
+              {selectedReceipt.order_type === 'delivery' && selectedReceipt.delivery_address && (
+                <div className="col-span-2 pt-1 border-t border-french-gold/15">
+                  <span className="text-[10px] text-french-muted block uppercase">Delivery Address</span>
+                  <span className="font-medium text-french-dark text-[11px] block">
+                    {selectedReceipt.delivery_address}
+                    {selectedReceipt.landmark ? ` (Near ${selectedReceipt.landmark})` : ''}
+                    {selectedReceipt.pincode ? ` - ${selectedReceipt.pincode}` : ''}
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Items Table */}
@@ -523,6 +580,7 @@ export default function ReceiptManager() {
                       <td className="py-2">
                         <span className="font-bold text-french-dark">{it.item_name || it.name}</span>
                         {it.variant && <span className="text-[10px] text-french-warm block">{it.variant} Variant</span>}
+                        {it.customizations && <span className="text-[10px] text-french-muted block">+ {it.customizations}</span>}
                       </td>
                       <td className="text-center py-2 font-mono">{it.quantity}</td>
                       <td className="text-right py-2 font-mono">₹{it.unit_price || it.price}</td>

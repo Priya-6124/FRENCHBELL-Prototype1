@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import confetti from 'canvas-confetti';
-import { Bell, CheckCircle2, ArrowRight, FileText, Download, ExternalLink } from 'lucide-react';
+import { Bell, CheckCircle2, ArrowRight, FileText, Download, ExternalLink, MapPin } from 'lucide-react';
 
 export default function ConfirmationModal({ order, onClose, onTrackOrder, onViewReceipt }) {
   if (!order) return null;
@@ -62,6 +62,16 @@ export default function ConfirmationModal({ order, onClose, onTrackOrder, onView
             Order Type: <strong className="uppercase text-french-dark">{order.order_type}</strong>
             {order.table_number && <span> • Table #{order.table_number}</span>}
           </div>
+
+          {order.order_type === 'delivery' && order.delivery_address && (
+            <div className="pt-2 border-t border-french-gold/20 text-xs text-french-dark/90 flex items-start gap-2">
+              <MapPin className="w-4 h-4 text-french-gold shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold block text-[11px] text-french-muted uppercase">Delivering To:</span>
+                <span className="font-medium">{order.delivery_address}{order.landmark ? ` (Near ${order.landmark})` : ''}{order.pincode ? ` - ${order.pincode}` : ''}</span>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Action Buttons */}

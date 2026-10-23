@@ -17,6 +17,7 @@ delete process.env.BREVO_API_KEY;
 
 const { default: app } = await import('../server/index.js');
 const { default: getDb } = await import('../server/db/index.js');
+const { default: smsService } = await import('../server/smsService.js');
 
 let server;
 let baseUrl;
@@ -402,6 +403,103 @@ try {
       body: JSON.stringify({ phone: '9123456780', otp: receivedOtp })
     });
     assert.strictEqual(res.status, 400);
+  });
+
+  await test('In production mode without SMS configured, Send OTP returns 503 and never exposes raw OTP', async () => {
+    const prevMode = process.env.TEST_OTP_MODE;
+    process.env.TEST_OTP_MODE = 'false';
+    const originalIsConfigured = smsService.isConfigured;
+    smsService.isConfigured = () => false;
+
+    try {
+      const res = await request('/api/auth/send-otp', {
+        method: 'POST',
+        body: JSON.stringify({ phone: '9876543210' })
+      });
+      assert.strictEqual(res.status, 503);
+      assert.strictEqual(res.body.testOtp, undefined, 'Raw OTP must NEVER be in response');
+      assert(res.body.error.includes('SMS service is not configured'));
+    } finally {
+      process.env.TEST_OTP_MODE = prevMode;
+      smsService.isConfigured = originalIsConfigured;
+    }
+  });
+
+  await test('In production mode with SMS configured, Send OTP dispatches SMS, returns 200, and never exposes raw OTP', async () => {
+    const prevMode = process.env.TEST_OTP_MODE;
+    process.env.TEST_OTP_MODE = 'false';
+    const originalIsConfigured = smsService.isConfigured;
+    const originalSendOtp = smsService.sendOtp;
+
+    let interceptedPhone = null;
+    let interceptedOtp = null;
+
+    smsService.isConfigured = () => true;
+    smsService.sendOtp = async ({ phone, otp }) => {
+      interceptedPhone = phone;
+      interceptedOtp = otp;
+      return { success: true, provider: 'mock_sms', messageId: 'sms_123', phone };
+    };
+
+    try {
+      const res = await request('/api/auth/send-otp', {
+        method: 'POST',
+        body: JSON.stringify({ phone: '9876543211' })
+      });
+      assert.strictEqual(res.status, 200);
+      assert.strictEqual(res.body.success, true);
+      assert.strictEqual(res.body.testOtp, undefined, 'Raw OTP must NEVER be exposed in production API response');
+      assert.strictEqual(interceptedPhone, '9876543211');
+      assert(/^\d{4}$/.test(interceptedOtp), 'Intercepted OTP must be 4 digits');
+
+      // Verify that the sent OTP actually verifies correctly against the database
+      const verifyRes = await request('/api/auth/verify-otp', {
+        method: 'POST',
+        body: JSON.stringify({
+          phone: '9876543211',
+          otp: interceptedOtp,
+          name: 'Prod Customer'
+        })
+      });
+      assert.strictEqual(verifyRes.status, 200);
+      assert.strictEqual(verifyRes.body.success, true);
+      assert.strictEqual(verifyRes.body.user.phone, '9876543211');
+    } finally {
+      process.env.TEST_OTP_MODE = prevMode;
+      smsService.isConfigured = originalIsConfigured;
+      smsService.sendOtp = originalSendOtp;
+    }
+  });
+
+  await test('In production mode with SMS dispatch failure, returns 502, does not expose OTP, and deletes stored OTP', async () => {
+    const prevMode = process.env.TEST_OTP_MODE;
+    process.env.TEST_OTP_MODE = 'false';
+    const originalIsConfigured = smsService.isConfigured;
+    const originalSendOtp = smsService.sendOtp;
+
+    smsService.isConfigured = () => true;
+    smsService.sendOtp = async () => {
+      throw new Error('Provider gateway unreachable');
+    };
+
+    try {
+      const res = await request('/api/auth/send-otp', {
+        method: 'POST',
+        body: JSON.stringify({ phone: '9876543212' })
+      });
+      assert.strictEqual(res.status, 502);
+      assert.strictEqual(res.body.testOtp, undefined, 'Raw OTP must NEVER be exposed on failure');
+      assert(res.body.error.includes('Unable to deliver verification code via SMS'));
+
+      // Verify database OTP was cleaned up so customer is not trapped in cooldown
+      const db = await getDb();
+      const stored = await db.getOtp('9876543212');
+      assert.strictEqual(stored, null, 'Stored OTP should be purged on dispatch failure');
+    } finally {
+      process.env.TEST_OTP_MODE = prevMode;
+      smsService.isConfigured = originalIsConfigured;
+      smsService.sendOtp = originalSendOtp;
+    }
   });
 
   // --- 6. DUMMY PAYMENT & ORDER TRACKING ---

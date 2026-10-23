@@ -26,7 +26,7 @@ export function AppProvider({ children }) {
   // Order Details Forms
   const [dineInDetails, setDineInDetails] = useState({ tableNumber: '04', numPeople: 2, customerName: '', instructions: '' });
   const [takeawayDetails, setTakeawayDetails] = useState({ customerName: '', phone: '', pickupTime: '20-30 mins', instructions: '' });
-  const [deliveryDetails, setDeliveryDetails] = useState({ customerName: '', phone: '', address: 'K. Narayanpura, Main Rd', landmark: 'Near SBI ATM', pincode: '560077', instructions: '' });
+  const [deliveryDetails, setDeliveryDetails] = useState({ customerName: '', phone: '', address: '', landmark: '', pincode: '', instructions: '' });
 
   // Cart State (Persisted in localStorage - Requirement 48)
   const [cart, setCart] = useState(() => {
@@ -212,6 +212,36 @@ export function AppProvider({ children }) {
     }
   }, [cartSubtotal, orderMode, offers]);
 
+  // Helper: parse customization options
+  const parseItemOptions = (customizationsInput) => {
+    if (!customizationsInput) return [];
+    if (Array.isArray(customizationsInput)) {
+      return customizationsInput.map(item => {
+        if (typeof item === 'object' && item !== null) {
+          const name = (item.name || item.label || '').trim();
+          const price = Number(item.price) || 0;
+          return { name, price };
+        }
+        const m = String(item).match(/^(.+?)(?:\s*[\(\-]\s*\+?\s*(?:₹|Rs\.?|INR)?\s*(\d+(?:\.\d+)?)\s*\)?)?$/i);
+        return m ? { name: m[1].trim(), price: m[2] ? parseFloat(m[2]) : 0 } : { name: String(item).trim(), price: 0 };
+      }).filter(Boolean);
+    }
+    if (typeof customizationsInput === 'string') {
+      const trimmed = customizationsInput.trim();
+      if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (Array.isArray(parsed)) return parseItemOptions(parsed);
+        } catch (e) {}
+      }
+      return trimmed.split(/[,;|\n]/).map(s => s.trim()).filter(Boolean).map(item => {
+        const m = item.match(/^(.+?)(?:\s*[\(\-]\s*\+?\s*(?:₹|Rs\.?|INR)?\s*(\d+(?:\.\d+)?)\s*\)?)?$/i);
+        return m ? { name: m[1].trim(), price: m[2] ? parseFloat(m[2]) : 0 } : { name: item, price: 0 };
+      });
+    }
+    return [];
+  };
+
   // Cart Functions
   const addToCart = (item, qty = 1, options = {}) => {
     const { variant = null, specialInstructions = '', selectedCustomizations = [], price = null } = options;
@@ -219,17 +249,26 @@ export function AppProvider({ children }) {
     setCartAnimate(true);
     setTimeout(() => setCartAnimate(false), 400);
 
-    // Use price passed from modal (already includes customization extras + variant price)
-    // Fall back to computing it if not provided
-    let unitPrice = price !== null ? Number(price) : Number(item.price);
-    if (price === null) {
-      if (variant === 'Veg' && item.price_veg) unitPrice = Number(item.price_veg);
-      if (variant === 'Chicken' && item.price_chicken) unitPrice = Number(item.price_chicken);
-    }
+    const basePrice = (variant === 'Veg' && item.price_veg)
+      ? Number(item.price_veg)
+      : (variant === 'Chicken' && item.price_chicken)
+      ? Number(item.price_chicken)
+      : Number(item.basePrice || item.price);
+
+    const availableCustomizations = item.availableCustomizations || item.customizations || '';
+    const availableOptions = parseItemOptions(availableCustomizations);
+
+    const customExtra = selectedCustomizations.reduce((sum, sel) => {
+      const cleanSel = String(sel).replace(/\s*[\(\-].*$/, '').trim().toLowerCase();
+      const matched = availableOptions.find(o => o.name.toLowerCase() === cleanSel);
+      return sum + (matched ? Number(matched.price) : 0);
+    }, 0);
+
+    const unitPrice = price !== null ? Number(price) : (basePrice + customExtra);
 
     // Unique key: item id + variant + customizations + instructions
     const customKey = selectedCustomizations.length > 0 ? selectedCustomizations.slice().sort().join(',') : '';
-    const cartItemId = `${item.id}-${variant || 'std'}-${customKey.slice(0, 30)}-${specialInstructions.slice(0, 10)}`;
+    const cartItemId = `${item.id}-${variant || 'std'}-${customKey.slice(0, 40)}-${specialInstructions.slice(0, 15)}`;
 
     setCart(prev => {
       const existing = prev.find(i => i.cartItemId === cartItemId);
@@ -241,6 +280,9 @@ export function AppProvider({ children }) {
           id: item.id,
           name: item.name,
           variant,
+          basePrice,
+          availableCustomizations,
+          customizationExtra: customExtra,
           specialInstructions,
           selectedCustomizations,
           customizations: selectedCustomizations.length > 0 ? selectedCustomizations.join(', ') : null,
@@ -260,9 +302,33 @@ export function AppProvider({ children }) {
   const updateCartItemDetails = (cartItemId, updates) => {
     setCart(prev => prev.map(item => {
       if (item.cartItemId === cartItemId) {
+        const updated = { ...item, ...updates };
+        const base = (updated.variant === 'Veg' && item.price_veg)
+          ? Number(item.price_veg)
+          : (updated.variant === 'Chicken' && item.price_chicken)
+          ? Number(item.price_chicken)
+          : Number(item.basePrice || item.price);
+
+        const available = item.availableCustomizations || item.customizations || '';
+        const optionsList = parseItemOptions(available);
+        const selList = updated.selectedCustomizations || [];
+        const extra = selList.reduce((sum, sel) => {
+          const cleanSel = String(sel).replace(/\s*[\(\-].*$/, '').trim().toLowerCase();
+          const matched = optionsList.find(o => o.name.toLowerCase() === cleanSel);
+          return sum + (matched ? Number(matched.price) : 0);
+        }, 0);
+
+        const newUnitPrice = updates.price !== undefined ? Number(updates.price) : (base + extra);
+        const customKey = selList.slice().sort().join(',');
+        const newCartItemId = `${item.id}-${updated.variant || 'std'}-${customKey.slice(0, 40)}-${(updated.specialInstructions || '').slice(0, 15)}`;
+
         return {
-          ...item,
-          ...updates
+          ...updated,
+          cartItemId: newCartItemId,
+          basePrice: base,
+          customizationExtra: extra,
+          price: newUnitPrice,
+          customizations: selList.length > 0 ? selList.join(', ') : null
         };
       }
       return item;
