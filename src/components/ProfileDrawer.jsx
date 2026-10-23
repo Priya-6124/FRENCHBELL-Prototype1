@@ -288,9 +288,9 @@ export default function ProfileDrawer({ onClose, onViewReceipt, onTrackOrder }) 
                         </span>
                       </div>
 
-                      <p className="text-xs text-french-dark font-medium">
+                      <p className="text-xs text-french-dark font-medium leading-relaxed">
                         {o.items
-                          ? o.items.map((i) => `${i.item_name} ×${i.quantity}`).join(', ')
+                          ? o.items.map((i) => `${i.item_name} ×${i.quantity}${i.customizations ? ` (+${i.customizations})` : ''}`).join(', ')
                           : 'FrenchBell Order'}
                       </p>
 
@@ -305,8 +305,11 @@ export default function ProfileDrawer({ onClose, onViewReceipt, onTrackOrder }) 
                           {o.order_status !== 'completed' && o.order_status !== 'cancelled' && (
                             <button
                               onClick={() => {
-                                if (onTrackOrder) onTrackOrder(o);
-                                if (onClose) onClose();
+                                if (onTrackOrder) {
+                                  onTrackOrder(o);
+                                } else if (onClose) {
+                                  onClose();
+                                }
                               }}
                               className="px-2.5 py-1 rounded-lg bg-french-gold text-french-dark font-extrabold text-[11px] hover:bg-french-gold-hover transition-all flex items-center gap-1 shadow-sm"
                               title="Live Order Tracking"
@@ -317,7 +320,11 @@ export default function ProfileDrawer({ onClose, onViewReceipt, onTrackOrder }) 
                           )}
                           <button
                             onClick={() => {
-                              if (onViewReceipt) onViewReceipt(o);
+                              if (onViewReceipt) {
+                                onViewReceipt(o);
+                              } else if (onClose) {
+                                onClose();
+                              }
                             }}
                             className="px-2.5 py-1 rounded-lg bg-french-cream border border-french-gold/40 text-french-dark font-bold text-[11px] hover:border-french-gold transition-all flex items-center gap-1"
                           >

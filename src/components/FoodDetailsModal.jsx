@@ -48,7 +48,7 @@ function parseCustomizations(customizationsInput) {
 }
 
 export default function FoodDetailsModal({ onClose }) {
-  const { selectedFood, addToCart, updateCartItemDetails } = useApp();
+  const { selectedFood, addToCart, updateCartItemDetails, setCartOpen } = useApp();
   if (!selectedFood) return null;
 
   const isCartEdit = Boolean(selectedFood.isCartEdit);
@@ -60,6 +60,9 @@ export default function FoodDetailsModal({ onClose }) {
     // Pre-populate if editing cart item
     if (selectedFood.selectedCustomizations && Array.isArray(selectedFood.selectedCustomizations)) {
       return selectedFood.selectedCustomizations;
+    }
+    if (typeof selectedFood.customizations === 'string' && selectedFood.customizations.trim()) {
+      return selectedFood.customizations.split(',').map(s => s.trim()).filter(Boolean);
     }
     return [];
   });
@@ -104,6 +107,13 @@ export default function FoodDetailsModal({ onClose }) {
   // Sanitize text input
   const sanitizeText = (text) => text.replace(/[<>]/g, '').trim();
 
+  const handleClose = () => {
+    if (isCartEdit && setCartOpen) {
+      setCartOpen(true);
+    }
+    if (onClose) onClose();
+  };
+
   const handleAction = () => {
     if (isOutOfStock && !isCartEdit) return;
 
@@ -117,6 +127,7 @@ export default function FoodDetailsModal({ onClose }) {
         selectedCustomizations,
         variant: selectedVariant
       });
+      if (setCartOpen) setCartOpen(true);
     } else {
       addToCart(selectedFood, quantity, {
         variant: selectedVariant,
@@ -132,12 +143,18 @@ export default function FoodDetailsModal({ onClose }) {
   const isVeg = selectedFood.veg_type === 'veg';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-french-dark/85 backdrop-blur-md animate-fadeIn">
-      <div className="relative w-full max-w-lg bg-french-card border border-french-gold/35 rounded-3xl overflow-hidden shadow-2xl max-h-[90vh] flex flex-col">
+    <div
+      onClick={handleClose}
+      className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-french-dark/85 backdrop-blur-md animate-fadeIn"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="relative w-full max-w-lg bg-french-card border border-french-gold/35 rounded-3xl overflow-hidden shadow-2xl max-h-[90vh] flex flex-col"
+      >
 
         {/* Close Button */}
         <button
-          onClick={onClose}
+          onClick={handleClose}
           className="absolute top-4 right-4 z-20 p-2 rounded-full bg-french-dark/75 text-french-cream border border-french-gold/30 hover:bg-french-gold hover:text-french-dark transition-colors shadow-lg"
           aria-label="Close"
         >

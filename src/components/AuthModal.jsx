@@ -381,12 +381,31 @@ export default function AuthModal({ onClose }) {
                 </button>
               </div>
 
-              {/* Dev Test OTP Notice */}
+              {/* Auto-Generated OTP Display */}
               {lastGeneratedOtp && (
-                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-800 text-xs text-center font-semibold">
-                  ⚠️ Testing Mode: Enter{' '}
-                  <span className="font-mono bg-amber-200 px-1.5 py-0.5 rounded text-french-dark font-black">{lastGeneratedOtp}</span>
-                  {' '}— real SMS is disabled.
+                <div className="p-3.5 rounded-2xl bg-french-gold/15 border border-french-gold/40 text-center space-y-1.5 shadow-sm">
+                  <span className="text-[11px] font-bold text-french-muted uppercase tracking-wider block">
+                    Your 4-Digit Verification Code
+                  </span>
+                  <div className="flex items-center justify-center gap-2">
+                    <span className="font-mono text-2xl font-black text-french-gold tracking-widest bg-french-dark px-4 py-1 rounded-xl border border-french-gold/40 shadow-inner">
+                      {lastGeneratedOtp}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const digits = String(lastGeneratedOtp).split('');
+                        setOtp(digits);
+                        submitVerification(String(lastGeneratedOtp));
+                      }}
+                      className="text-[11px] font-extrabold uppercase px-3 py-2 rounded-xl bg-french-gold text-french-dark hover:bg-french-gold-hover transition-all shadow-sm"
+                    >
+                      Auto-Fill & Verify
+                    </button>
+                  </div>
+                  <span className="text-[10px] text-french-muted block">
+                    Enter the 4 digits above or click Auto-Fill
+                  </span>
                 </div>
               )}
 

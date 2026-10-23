@@ -154,12 +154,6 @@ export default function AdminSidebar({
     },
     {
       type: 'single',
-      id: 'payments',
-      label: 'Payments',
-      icon: CreditCard,
-    },
-    {
-      type: 'single',
       id: 'receipts',
       label: 'Receipts',
       icon: Receipt,
@@ -194,7 +188,6 @@ export default function AdminSidebar({
         { id: 'settings-cafe', label: 'Cafe Information' },
         { id: 'settings-hours', label: 'Business Hours' },
         { id: 'settings-orders', label: 'Order Settings' },
-        { id: 'settings-payment', label: 'Payment Settings' },
         { id: 'settings-admins', label: 'Admin Users' },
         { id: 'settings-logs', label: 'Activity Logs' },
       ]

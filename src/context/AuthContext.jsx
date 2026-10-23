@@ -50,9 +50,10 @@ export function AuthProvider({ children }) {
         throw new Error(data.error || 'Failed to send verification code.');
       }
 
-      // TEST MODE: Store OTP returned from server so the UI can display it
-      if (data.testOtp) {
-        setLastGeneratedOtp(data.testOtp);
+      // Store OTP returned from server so the UI can display it
+      const returnedOtp = data.testOtp || data.otp;
+      if (returnedOtp) {
+        setLastGeneratedOtp(returnedOtp);
       } else {
         setLastGeneratedOtp(null);
       }

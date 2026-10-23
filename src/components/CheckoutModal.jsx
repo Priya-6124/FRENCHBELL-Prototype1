@@ -603,7 +603,7 @@ export default function CheckoutModal({ onClose, onOrderPlaced }) {
                         <span>{item.quantity}x {item.name}</span>
                         {item.variant && <span className="text-french-muted"> • {item.variant}</span>}
                         {item.customizations && (
-                          <div className="text-[10px] text-french-gold font-semibold truncate">
+                          <div className="text-[10px] text-french-gold font-semibold break-words leading-tight">
                             + {item.customizations}
                           </div>
                         )}

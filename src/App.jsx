@@ -144,8 +144,14 @@ function MainSiteContent() {
         <ConfirmationModal
           order={activeOrder}
           onClose={() => setActiveModal(null)}
-          onTrackOrder={() => setActiveModal('tracker')}
-          onViewReceipt={() => setActiveModal('receipt')}
+          onTrackOrder={(ord) => {
+            if (ord) setActiveOrder(ord);
+            setActiveModal('tracker');
+          }}
+          onViewReceipt={(ord) => {
+            if (ord) setActiveOrder(ord);
+            setActiveModal('receipt');
+          }}
         />
       )}
       {activeModal === 'tracker' && (

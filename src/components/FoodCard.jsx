@@ -114,6 +114,18 @@ export default function FoodCard({ item }) {
           <p className="text-xs text-french-muted line-clamp-2 mt-1 font-normal leading-relaxed">
             {item.description}
           </p>
+
+          {/* Customization Options Text */}
+          {item.customizations && (
+            <div className="mt-2 pt-1.5 border-t border-french-gold/15 flex items-start gap-1">
+              <span className="text-[10px] font-black text-french-gold uppercase tracking-wider shrink-0">
+                Customise:
+              </span>
+              <span className="text-[10px] text-french-muted font-medium italic line-clamp-2">
+                {item.customizations}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Bottom Price & Add to Cart Button */}

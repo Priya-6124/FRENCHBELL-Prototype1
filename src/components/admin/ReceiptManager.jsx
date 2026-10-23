@@ -46,7 +46,8 @@ export default function ReceiptManager() {
       const matchNum = (o.order_number || '').toLowerCase().includes(q);
       const matchName = (o.customer_name || '').toLowerCase().includes(q);
       const matchPhone = (o.phone || '').includes(q);
-      if (!matchNum && !matchName && !matchPhone) return false;
+      const matchTxn = (o.transaction_id || '').toLowerCase().includes(q);
+      if (!matchNum && !matchName && !matchPhone && !matchTxn) return false;
     }
     return true;
   });
@@ -64,19 +65,15 @@ export default function ReceiptManager() {
 
   const getTxnIdDisplay = (order) => {
     if (!order) return 'Not available';
-    const isPayAtCafe = order.payment_method === 'cash';
     const rawTxnId = order.transaction_id || order.payment?.transaction_id || order.payment_id;
+    if (rawTxnId) return rawTxnId;
+
     const isPaid = order.payment_status === 'successful' || order.payment_status === 'paid';
     const isFailed = order.payment_status === 'failed';
+    const isPayAtCafe = order.payment_method === 'cash';
 
-    if (isPayAtCafe) {
-      if (isPaid && rawTxnId && !rawTxnId.startsWith('rzp_order_')) {
-        return rawTxnId;
-      }
-      return isPaid ? 'Paid at Cafe (Cash)' : 'Not applicable (Unpaid)';
-    }
-    if (isPaid && rawTxnId && !rawTxnId.startsWith('rzp_order_')) {
-      return rawTxnId;
+    if (isPaid) {
+      return isPayAtCafe ? `CASH-${order.order_number || order.id}` : `TXN-${order.order_number || order.id}`;
     }
     if (isFailed) return 'Payment Failed';
     return 'Payment Pending';
@@ -355,6 +352,7 @@ export default function ReceiptManager() {
                 <th className="p-4 font-serif font-bold uppercase tracking-wider text-[11px]">Items</th>
                 <th className="p-4 font-serif font-bold uppercase tracking-wider text-[11px] text-right">Amount</th>
                 <th className="p-4 font-serif font-bold uppercase tracking-wider text-[11px] text-center">Payment</th>
+                <th className="p-4 font-serif font-bold uppercase tracking-wider text-[11px]">Transaction ID</th>
                 <th className="p-4 font-serif font-bold uppercase tracking-wider text-[11px] text-center">Status</th>
                 <th className="p-4 font-serif font-bold uppercase tracking-wider text-[11px] text-center">Receipt Actions</th>
               </tr>
@@ -363,7 +361,10 @@ export default function ReceiptManager() {
               {filteredOrders.length > 0 ? (
                 filteredOrders.map((order) => {
                   const itemsCount = (order.items || []).reduce((acc, i) => acc + (i.quantity || 1), 0);
-                  const itemsPreview = (order.items || []).map(i => `${i.quantity}x ${i.item_name || i.name}`).join(', ');
+                  const itemsPreview = (order.items || []).map(i => {
+                    const custom = i.customizations ? ` (+${i.customizations})` : '';
+                    return `${i.quantity}x ${i.item_name || i.name}${custom}`;
+                  }).join(', ');
 
                   return (
                     <tr key={order.order_number || order.id} className="hover:bg-french-gold/10 transition-colors">
@@ -424,6 +425,13 @@ export default function ReceiptManager() {
                             : 'bg-amber-100 text-amber-800 border border-amber-300'
                         }`}>
                           {order.payment_status || 'PENDING'}
+                        </span>
+                      </td>
+
+                      {/* Transaction ID */}
+                      <td className="p-4 font-mono text-[11px] font-bold text-french-dark">
+                        <span className="px-2 py-0.5 rounded bg-french-cream border border-french-gold/25 block max-w-[140px] truncate" title={getTxnIdDisplay(order)}>
+                          {getTxnIdDisplay(order)}
                         </span>
                       </td>
 

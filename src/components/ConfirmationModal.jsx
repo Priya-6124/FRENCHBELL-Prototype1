@@ -78,8 +78,11 @@ export default function ConfirmationModal({ order, onClose, onTrackOrder, onView
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
           <button
             onClick={() => {
-              if (onTrackOrder) onTrackOrder(order);
-              if (onClose) onClose();
+              if (onTrackOrder) {
+                onTrackOrder(order);
+              } else if (onClose) {
+                onClose();
+              }
             }}
             className="py-3.5 px-4 rounded-2xl bg-french-dark text-french-gold font-extrabold text-xs uppercase tracking-wider hover:bg-french-gold hover:text-french-dark transition-all flex items-center justify-center gap-2 gold-glow"
           >
@@ -89,8 +92,11 @@ export default function ConfirmationModal({ order, onClose, onTrackOrder, onView
 
           <button
             onClick={() => {
-              if (onViewReceipt) onViewReceipt(order);
-              if (onClose) onClose();
+              if (onViewReceipt) {
+                onViewReceipt(order);
+              } else if (onClose) {
+                onClose();
+              }
             }}
             className="py-3.5 px-4 rounded-2xl bg-french-cream border border-french-gold/40 text-french-dark font-extrabold text-xs uppercase tracking-wider hover:border-french-gold transition-all flex items-center justify-center gap-2"
           >

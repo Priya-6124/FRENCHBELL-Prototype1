@@ -272,6 +272,51 @@ export default function OrderTracker({ order: propOrder, onClose }) {
           </div>
         )}
 
+        {/* Ordered Items with Customizations Card */}
+        {Array.isArray(liveOrder.items || order.items) && (liveOrder.items || order.items).length > 0 && (
+          <div className="p-4 rounded-2xl bg-french-cream/70 border border-french-gold/25 space-y-2.5">
+            <div className="flex items-center justify-between border-b border-french-gold/20 pb-2">
+              <span className="font-serif font-bold text-xs uppercase tracking-wider text-french-dark">
+                Order Items ({ (liveOrder.items || order.items).reduce((s, i) => s + (i.quantity || 1), 0) })
+              </span>
+              <span className="font-mono font-bold text-sm text-french-dark">
+                ₹{liveOrder.total || order.total}
+              </span>
+            </div>
+            <div className="divide-y divide-french-gold/15">
+              {(liveOrder.items || order.items).map((it, idx) => (
+                <div key={idx} className="py-2 first:pt-1 last:pb-0 flex items-start justify-between text-xs gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-bold text-french-dark">
+                        {it.quantity}× {it.item_name || it.name}
+                      </span>
+                      {it.variant && (
+                        <span className="text-[10px] font-bold text-french-warm uppercase bg-french-gold/10 px-1.5 py-0.2 rounded border border-french-gold/25">
+                          {it.variant}
+                        </span>
+                      )}
+                    </div>
+                    {it.customizations && (
+                      <span className="text-[11px] font-semibold text-french-gold block mt-0.5">
+                        + {it.customizations}
+                      </span>
+                    )}
+                    {it.special_instructions && (
+                      <span className="text-[10px] text-french-muted italic block mt-0.5">
+                        "{it.special_instructions}"
+                      </span>
+                    )}
+                  </div>
+                  <span className="font-mono font-bold text-french-dark shrink-0">
+                    ₹{it.total_price || (it.unit_price * it.quantity) || it.price}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Download Receipt button + live refresh indicator */}
         <div className="pt-2 flex items-center justify-between border-t border-french-gold/20">
           <a

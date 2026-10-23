@@ -359,6 +359,16 @@ export async function initDatabase() {
   try {
     await pool.query('ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS customizations TEXT');
     await pool.query('ALTER TABLE order_items ADD COLUMN IF NOT EXISTS customizations TEXT');
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS customer_otps (
+        phone VARCHAR(50) PRIMARY KEY,
+        hashed_otp VARCHAR(255) NOT NULL,
+        expires_at BIGINT NOT NULL,
+        attempts INT DEFAULT 0,
+        cooldown_until BIGINT NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
   } catch (migErr) {
     // Non-fatal if table not yet migrated or already exists
   }

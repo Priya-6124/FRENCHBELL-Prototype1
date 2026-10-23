@@ -121,22 +121,87 @@ export default function AdminDashboard({ onBackToSite }) {
           salesGraph: summaryData.sales_graph || prev.salesGraph
         }));
       } else if (Array.isArray(ordersList) && ordersList.length > 0) {
-        const today = new Date().toDateString();
-        const todayOrdersList = ordersList.filter(o => o.created_at && new Date(o.created_at).toDateString() === today);
-        const activeList = todayOrdersList.length ? todayOrdersList : ordersList;
-        const revenue = activeList.filter(o => o.order_status !== 'cancelled').reduce((sum, o) => sum + (Number(o.total) || 0), 0);
+        const toDateStr = (val) => {
+          if (!val) return '';
+          if (val instanceof Date) return val.toISOString().split('T')[0];
+          if (typeof val === 'string') return val.split('T')[0].split(' ')[0];
+          try { return new Date(val).toISOString().split('T')[0]; } catch { return ''; }
+        };
+
+        const todayStr = toDateStr(new Date());
+        const validOrders = ordersList.filter(o => o.order_status !== 'cancelled');
+        const todayOrdersList = validOrders.filter(o => toDateStr(o.business_day || o.created_at) === todayStr);
+        const revenue = (todayOrdersList.length ? todayOrdersList : validOrders).reduce((sum, o) => sum + (Number(o.total) || 0), 0);
+
+        // Fallback trajectory calculations directly from ordersList
+        const todaySlots = [
+          { date: '10:00', revenue: 0 },
+          { date: '12:00', revenue: 0 },
+          { date: '14:00', revenue: 0 },
+          { date: '16:00', revenue: 0 },
+          { date: '18:00', revenue: 0 },
+          { date: '20:00', revenue: 0 },
+          { date: '22:00', revenue: 0 }
+        ];
+        for (const o of (todayOrdersList.length ? todayOrdersList : validOrders)) {
+          if (!o.created_at) continue;
+          const h = new Date(o.created_at).getHours();
+          const val = Number(o.total) || 0;
+          if (h < 11) todaySlots[0].revenue += val;
+          else if (h < 13) todaySlots[1].revenue += val;
+          else if (h < 15) todaySlots[2].revenue += val;
+          else if (h < 17) todaySlots[3].revenue += val;
+          else if (h < 19) todaySlots[4].revenue += val;
+          else if (h < 21) todaySlots[5].revenue += val;
+          else todaySlots[6].revenue += val;
+        }
+
+        const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        const weeklySlots = [];
+        for (let i = 6; i >= 0; i--) {
+          const d = new Date();
+          d.setDate(d.getDate() - i);
+          const iso = toDateStr(d);
+          const dayLabel = `${dayNames[d.getDay()]} ${d.getDate()}`;
+          const dayRev = validOrders
+            .filter(o => toDateStr(o.business_day || o.created_at) === iso)
+            .reduce((sum, o) => sum + (Number(o.total) || 0), 0);
+          weeklySlots.push({ date: dayLabel, revenue: dayRev });
+        }
+
+        const monthlySlots = [
+          { date: 'Week 1', revenue: 0 },
+          { date: 'Week 2', revenue: 0 },
+          { date: 'Week 3', revenue: 0 },
+          { date: 'Week 4', revenue: 0 }
+        ];
+        const now = Date.now();
+        for (const o of validOrders) {
+          if (!o.created_at) continue;
+          const diffDays = Math.floor((now - new Date(o.created_at).getTime()) / (1000 * 60 * 60 * 24));
+          const val = Number(o.total) || 0;
+          if (diffDays <= 7) monthlySlots[3].revenue += val;
+          else if (diffDays <= 14) monthlySlots[2].revenue += val;
+          else if (diffDays <= 21) monthlySlots[1].revenue += val;
+          else if (diffDays <= 28) monthlySlots[0].revenue += val;
+        }
 
         setDashboardStats(prev => ({
           ...prev,
           todayRevenue: revenue || prev.todayRevenue,
-          todayOrders: activeList.length,
+          todayOrders: (todayOrdersList.length ? todayOrdersList : validOrders).length,
           pendingOrders: ordersList.filter(o => ['received', 'new', 'accepted', 'preparing'].includes(o.order_status)).length,
           completedOrders: ordersList.filter(o => o.order_status === 'completed').length,
           cancelledOrders: ordersList.filter(o => o.order_status === 'cancelled').length,
           dineInOrders: ordersList.filter(o => o.order_type === 'dine-in').length,
           takeawayOrders: ordersList.filter(o => o.order_type === 'takeaway').length,
           deliveryOrders: ordersList.filter(o => o.order_type === 'delivery').length,
-          recentOrders: ordersList.slice(0, 7)
+          recentOrders: ordersList.slice(0, 7),
+          salesGraph: {
+            today: todaySlots,
+            weekly: weeklySlots,
+            monthly: monthlySlots
+          }
         }));
       }
     } catch (e) {
@@ -172,8 +237,38 @@ export default function AdminDashboard({ onBackToSite }) {
     }
   };
 
-  // Selected chart data based on active mode
-  const currentChartData = dashboardStats.salesGraph[salesGraphMode] || dashboardStats.salesGraph.weekly;
+  // Selected chart data based on active mode with resilient baseline
+  const rawChartData = dashboardStats.salesGraph?.[salesGraphMode];
+  const defaultBaseline = salesGraphMode === 'today'
+    ? [
+        { date: '10:00', revenue: 0 },
+        { date: '12:00', revenue: 0 },
+        { date: '14:00', revenue: 0 },
+        { date: '16:00', revenue: 0 },
+        { date: '18:00', revenue: 0 },
+        { date: '20:00', revenue: 0 },
+        { date: '22:00', revenue: 0 }
+      ]
+    : salesGraphMode === 'monthly'
+    ? [
+        { date: 'Week 1', revenue: 0 },
+        { date: 'Week 2', revenue: 0 },
+        { date: 'Week 3', revenue: 0 },
+        { date: 'Week 4', revenue: 0 }
+      ]
+    : [
+        { date: 'Mon', revenue: 0 },
+        { date: 'Tue', revenue: 0 },
+        { date: 'Wed', revenue: 0 },
+        { date: 'Thu', revenue: 0 },
+        { date: 'Fri', revenue: 0 },
+        { date: 'Sat', revenue: 0 },
+        { date: 'Sun', revenue: 0 }
+      ];
+
+  const currentChartData = (Array.isArray(rawChartData) && rawChartData.length > 0)
+    ? rawChartData
+    : defaultBaseline;
 
   return (
     <div className="min-h-screen bg-french-cream flex">
@@ -425,8 +520,8 @@ export default function AdminDashboard({ onBackToSite }) {
                   </div>
 
                   {/* Recharts Area Chart displaying real sales data */}
-                  <div className="w-full h-72">
-                    <ResponsiveContainer width="100%" height="100%">
+                  <div className="w-full h-72 min-w-0">
+                    <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                       <AreaChart data={currentChartData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
                         <defs>
                           <linearGradient id="dashboardRevenueGrad" x1="0" y1="0" x2="0" y2="1">
@@ -435,7 +530,7 @@ export default function AdminDashboard({ onBackToSite }) {
                           </linearGradient>
                         </defs>
                         <XAxis dataKey="date" stroke="#8C7A6B" fontSize={11} tickLine={false} />
-                        <YAxis stroke="#8C7A6B" fontSize={11} tickFormatter={(v) => `₹${v}`} tickLine={false} />
+                        <YAxis stroke="#8C7A6B" fontSize={11} tickFormatter={(v) => `₹${v}`} tickLine={false} domain={[0, 'auto']} allowDecimals={false} />
                         <Tooltip
                           contentStyle={{ backgroundColor: '#1F110A', borderColor: '#D4AF37', borderRadius: '14px', color: '#FAF5ED', fontSize: '12px' }}
                           formatter={(value, name) => [`₹${Number(value).toLocaleString('en-IN')}`, 'Billed Sales']}

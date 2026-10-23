@@ -102,10 +102,11 @@ export default function CartDrawer() {
       isCartEdit: true,
       price: item.basePrice || originalMenuItem.price || item.price,
       customizations: originalMenuItem.customizations || item.availableCustomizations || item.customizations,
-      selectedCustomizations: item.selectedCustomizations || [],
+      selectedCustomizations: item.selectedCustomizations || (typeof item.customizations === 'string' ? item.customizations.split(',').map(s => s.trim()).filter(Boolean) : []),
       variant: item.variant || null,
       specialInstructions: item.specialInstructions || ''
     });
+    setCartOpen(false);
     setActiveModal('foodDetails');
   };
 
@@ -246,9 +247,9 @@ export default function CartDrawer() {
                             </span>
                           )}
 
-                          {item.customizations && (
-                            <span className="text-[10px] font-semibold text-french-gold block truncate mt-0.5">
-                              + {item.customizations}
+                          {(item.customizations || (Array.isArray(item.selectedCustomizations) && item.selectedCustomizations.length > 0)) && (
+                            <span className="text-[11px] font-semibold text-french-warm bg-french-gold/15 px-2 py-0.5 rounded-md inline-block max-w-full break-words leading-snug mt-1 border border-french-gold/25">
+                              + {item.customizations || item.selectedCustomizations.join(', ')}
                             </span>
                           )}
 

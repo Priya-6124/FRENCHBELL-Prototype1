@@ -336,13 +336,19 @@ export default function LiveOrderBoard({ initialStatus = 'all', initialFilterTyp
                           </div>
 
                           {/* Items Preview */}
-                          <div className="p-2 rounded-xl bg-french-cream/40 border border-french-gold/15 space-y-1 text-xs">
+                          <div className="p-2 rounded-xl bg-french-cream/40 border border-french-gold/15 space-y-1.5 text-xs">
                             {(order.items || []).slice(0, 3).map((item, idx) => (
-                              <div key={idx} className="flex justify-between items-center text-[11px]">
-                                <span className="truncate pr-1">
-                                  <strong>{item.quantity}x</strong> {item.item_name || item.name}
-                                </span>
-                                <span className="font-mono font-bold text-french-dark">
+                              <div key={idx} className="flex justify-between items-start text-[11px] gap-2">
+                                <div className="truncate pr-1 flex-1">
+                                  <span><strong>{item.quantity}x</strong> {item.item_name || item.name}</span>
+                                  {item.variant && <span className="text-[10px] text-french-muted font-normal"> ({item.variant})</span>}
+                                  {item.customizations && (
+                                    <span className="block text-[10px] text-french-gold font-semibold truncate leading-tight">
+                                      + {item.customizations}
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="font-mono font-bold text-french-dark shrink-0">
                                   ₹{item.total_price || (item.unit_price * item.quantity)}
                                 </span>
                               </div>
@@ -454,8 +460,11 @@ export default function LiveOrderBoard({ initialStatus = 'all', initialFilterTyp
                           </span>
                         </td>
 
-                        <td className="p-4 text-xs">
-                          {(order.items || []).map(i => `${i.quantity}x ${i.item_name || i.name}`).join(', ')}
+                        <td className="p-4 text-xs max-w-xs">
+                          {(order.items || []).map(i => {
+                            const custom = i.customizations ? ` (+${i.customizations})` : '';
+                            return `${i.quantity}x ${i.item_name || i.name}${custom}`;
+                          }).join(', ')}
                         </td>
 
                         <td className="p-4">

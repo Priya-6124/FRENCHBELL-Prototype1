@@ -421,6 +421,11 @@ export default function MenuManager({ initialTab = 'all' }) {
                         <div>
                           <span className="font-bold text-sm block">{item.name}</span>
                           <span className="text-[10px] text-french-muted">₹{item.price} • {item.veg_type}</span>
+                          {item.customizations && (
+                            <span className="text-[9px] font-mono text-french-warm bg-french-gold/15 px-1.5 py-0.5 rounded border border-french-gold/25 block mt-0.5 max-w-[220px] truncate" title={item.customizations}>
+                              + {item.customizations}
+                            </span>
+                          )}
                         </div>
                       </td>
 
@@ -574,6 +579,11 @@ export default function MenuManager({ initialTab = 'all' }) {
                       <td className="py-3 px-4 max-w-xs">
                         <div className="font-serif font-bold text-sm text-french-dark">{item.name}</div>
                         <div className="text-[11px] text-french-muted truncate">{item.description}</div>
+                        {item.customizations && (
+                          <div className="mt-1 text-[10px] font-mono text-french-warm bg-french-cream/80 px-2 py-0.5 rounded border border-french-gold/30 max-w-xs truncate" title={item.customizations}>
+                            <span className="font-bold text-french-dark">Customizations:</span> {item.customizations}
+                          </div>
+                        )}
                       </td>
 
                       <td className="py-3 px-4 capitalize font-semibold text-french-warm">
