@@ -171,14 +171,7 @@ export default function OrderDetailDrawer({ order, onClose, onStatusUpdated }) {
               </a>
             </div>
 
-            {order.order_type === 'dine-in' && (
-              <div>
-                <span className="text-[10px] text-french-muted uppercase tracking-wider block font-bold">Dine-In Guests</span>
-                <span className="font-bold text-sm text-french-dark mt-0.5 block">
-                  {order.num_people || 2} Guest(s)
-                </span>
-              </div>
-            )}
+
 
             {order.pickup_time && (
               <div>
